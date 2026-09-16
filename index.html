@@ -877,6 +877,10 @@
         display: flex; flex-direction: column; gap: 6px; padding: 6px 12px 14px 12px;
         overflow-y: auto; flex: 1; min-height: 0;
       }
+      .sidebar-subtab-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 12px 8px 12px; }
+      .sidebar-subtab-list .sidebar-nav-btn { padding-left: 34px; font-size: 13px; }
+      .sidebar.collapsed .sidebar-subtab-list { padding: 4px 8px 8px 8px; }
+      .sidebar.collapsed .sidebar-subtab-list .sidebar-nav-btn { padding-left: 12px; }
       .cat-btn-side { width: 100%; text-align: left; border-radius: 8px; padding: 9px 12px; box-shadow: none; font-size: 13px; transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease; }
       .cat-btn-side:hover { transform: translateX(3px); filter: brightness(1.08); box-shadow: 0 3px 10px rgba(0,0,0,0.3); }
       .sidebar.collapsed .sidebar-category-list { padding: 6px 8px 14px 8px; }
@@ -1451,7 +1455,9 @@
     <div class="app-layout" id="appLayout" style="display:none;">
       <nav class="sidebar collapsed" id="mainSidebar">
         <div style="display:flex;">
-          <button class="sidebar-toggle" onclick="showHomeMenu_()" title="Về màn hình chọn phần mềm"><i class="fa-solid fa-house"></i></button>
+          <button class="sidebar-toggle sidebar-nav-btn" onclick="showHomeMenu_()" title="Về màn hình chọn phần mềm" style="width:100%;">
+            <i class="fa-solid fa-house"></i><span class="nav-label">Trang chủ</span>
+          </button>
         </div>
 
         <div id="sidebarTienDoGroup">
@@ -1470,9 +1476,21 @@
           <button class="sidebar-nav-btn" data-tab="tab-khbus" onclick="switchTab('tab-khbus')">
             <i class="fa-solid fa-table"></i><span class="nav-label">KH BUS</span>
           </button>
-          <button class="sidebar-nav-btn" data-tab="tab-baocaogc" onclick="switchTab('tab-baocaogc')">
-            <i class="fa-solid fa-clipboard-list"></i><span class="nav-label">Báo cáo GC</span>
+          <button type="button" class="sidebar-nav-btn" id="sidebarBaoCaoGcToggleBtn" onclick="toggleSidebarBaoCaoGcList_()" style="justify-content:space-between; width:100%;">
+            <span style="display:flex; align-items:center; gap:10px;"><i class="fa-solid fa-clipboard-list"></i><span class="nav-label">Báo cáo GC</span></span>
+            <i class="fa-solid fa-chevron-down nav-label" id="sidebarBaoCaoGcChevron" style="transition:transform 0.2s ease;"></i>
           </button>
+          <div id="sidebarBaoCaoGcList" class="sidebar-subtab-list" style="display:none;">
+            <button type="button" class="sidebar-nav-btn" data-subtab="tien" onclick="switchTab('tab-baocaogc'); switchBaoCaoGcSubTab_('tien');">
+              <i class="fa-solid fa-record-vinyl"></i><span class="nav-label">Tiện</span>
+            </button>
+            <button type="button" class="sidebar-nav-btn" data-subtab="phay" onclick="switchTab('tab-baocaogc'); switchBaoCaoGcSubTab_('phay');">
+              <i class="fa-solid fa-gear"></i><span class="nav-label">Phay</span>
+            </button>
+            <button type="button" class="sidebar-nav-btn" data-subtab="nguoi" onclick="switchTab('tab-baocaogc'); switchBaoCaoGcSubTab_('nguoi');">
+              <i class="fa-solid fa-hammer"></i><span class="nav-label">Nguội</span>
+            </button>
+          </div>
           <div class="sidebar-divider"></div>
           <button type="button" class="sidebar-nav-btn" id="sidebarCategoryToggleBtn" onclick="toggleSidebarCategoryList_()" style="justify-content:space-between; width:100%;">
             <span style="display:flex; align-items:center; gap:10px;"><i class="fa-solid fa-layer-group"></i><span class="nav-label">Loại đơn hàng</span></span>
@@ -1622,9 +1640,9 @@
           <div class="tracking-toolbar" style="flex-wrap:wrap;">
             <h2 style="margin:0; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
               <div style="display:flex; gap:8px;">
-                <button type="button" id="bcgcSubTabBtn-tien" class="quick-btn active" onclick="switchBaoCaoGcSubTab_('tien')" style="font-size:14px; padding:8px 16px;">Tiện</button>
-                <button type="button" id="bcgcSubTabBtn-phay" class="quick-btn" onclick="switchBaoCaoGcSubTab_('phay')" style="font-size:14px; padding:8px 16px;">Phay</button>
-                <button type="button" id="bcgcSubTabBtn-nguoi" class="quick-btn" onclick="switchBaoCaoGcSubTab_('nguoi')" style="font-size:14px; padding:8px 16px;">Nguội</button>
+                <button type="button" id="bcgcSubTabBtn-tien" class="quick-btn active" onclick="switchBaoCaoGcSubTab_('tien')" style="font-size:14px; padding:8px 16px;"><i class="fa-solid fa-record-vinyl" style="margin-right:6px;"></i>Tiện</button>
+                <button type="button" id="bcgcSubTabBtn-phay" class="quick-btn" onclick="switchBaoCaoGcSubTab_('phay')" style="font-size:14px; padding:8px 16px;"><i class="fa-solid fa-gear" style="margin-right:6px;"></i>Phay</button>
+                <button type="button" id="bcgcSubTabBtn-nguoi" class="quick-btn" onclick="switchBaoCaoGcSubTab_('nguoi')" style="font-size:14px; padding:8px 16px;"><i class="fa-solid fa-hammer" style="margin-right:6px;"></i>Nguội</button>
               </div>
             </h2>
           </div>
@@ -1643,7 +1661,7 @@
               <div style="display:flex; gap:8px; align-items:center;">
                 <div id="bcgcStatus-tien" style="font-size:12px; color:#888; white-space:nowrap;"></div>
                 <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_tien')"><i class="fa-solid fa-table-columns"></i></button>
-                <button type="button" id="bcgcRefreshBtn-tien" class="icon-btn" title="Làm mới" onclick="loadBaoCaoGcData_('tien')"><i class="fa-solid fa-arrows-rotate"></i></button>
+                <button type="button" id="bcgcRefreshBtn-tien" class="icon-btn" title="Tìm lại" onclick="bcgcApplySearch_('tien')"><i class="fa-solid fa-arrows-rotate"></i></button>
               </div>
             </div>
             <div id="bcgcTableWrap-tien" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
@@ -1967,7 +1985,7 @@ function confirmModalYes_() {
       function addPermTab_() { openAddPermTabModal_(); }
       // Các chức vụ được thấy/sửa bảng phân quyền. Thêm đúng chữ tên chức vụ trong cột D
       // sheet "Người dùng" của bạn vào đây (VD "Quản Đốc") nếu tài khoản bạn không phải "Quản lý".
-      const PERM_ADMIN_ROLES_ = ['Quản lý', 'ADMIN'];
+      const SUPER_ADMIN_MSNV_ = '22091370'; // Nguyễn Trương Thanh Tuấn - duy nhất thấy mục Phân quyền
       let isPermAdmin_ = false;
       let permUsersCache_ = null;
       const PERM_LIST_CACHE_KEY_ = 'gcck_perm_users_cache_v1';
@@ -1981,8 +1999,7 @@ function confirmModalYes_() {
         // So khớp KHÔNG phân biệt hoa/thường + bỏ khoảng trắng thừa - tránh trường hợp cột
         // "Chức vụ" trên Sheet gõ lệch 1 chút (VD "quản lý") khiến tài khoản quản lý thật sự
         // không được nhận diện, làm ô Time ĐK hiện dạng chữ thường thay vì ô nhập được.
-        const chucVuNormalized_ = String(currentUser_ && currentUser_.chucVu || '').trim().toLowerCase();
-        isPermAdmin_ = !!(currentUser_ && PERM_ADMIN_ROLES_.some(function(r) { return r.toLowerCase() === chucVuNormalized_; }));
+        isPermAdmin_ = !!(currentUser_ && String(currentUser_.msnv || '').trim() === SUPER_ADMIN_MSNV_);
         const permWrap = document.getElementById('permSectionWrap');
         if (permWrap) permWrap.style.display = isPermAdmin_ ? 'block' : 'none';
 
@@ -2714,6 +2731,21 @@ function confirmModalYes_() {
         const isOpen = list.style.display !== 'none';
         list.style.display = isOpen ? 'none' : 'flex';
         if (chevron) chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      }
+
+      function toggleSidebarBaoCaoGcList_() {
+        const list = document.getElementById('sidebarBaoCaoGcList');
+        const chevron = document.getElementById('sidebarBaoCaoGcChevron');
+        if (!list) return;
+        const isOpen = list.style.display !== 'none';
+        list.style.display = isOpen ? 'none' : 'flex';
+        if (chevron) chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      }
+
+      function setActiveBaoCaoGcSidebar_(loai) {
+        document.querySelectorAll('#sidebarBaoCaoGcList .sidebar-nav-btn').forEach(function(btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-subtab') === loai);
+        });
       }
 
       function searchByCategory(prefix, btnEl) {
@@ -4057,7 +4089,7 @@ function tgGcStickyColClass_(arrIdx) {
           khbusStartPolling_();
         } else if (tabId === 'tab-baocaogc') {
           activeTrackingTab_ = null;
-          if (!baoCaoGcState_.tien.loaded) loadBaoCaoGcData_('tien');
+          renderBaoCaoGcTable_('tien');
         } else if (tabId === 'tab-nhansu-dashboard') {
           activeTrackingTab_ = null;
           loadNhanSuDashboard_();
@@ -5987,7 +6019,6 @@ function onVtGhQrScanSuccess_(decodedText) {
 
             /* ================= BÁO CÁO GIA CÔNG (Tiện / Phay / Nguội) ================= */
       const BAOCAOGC_COLUMNS_ = [
-        { key: 'ma_id', label: 'Mã ID' },
         { key: 'kh_may', label: 'KH máy' },
         { key: 'ngay_sx_thuc_te', label: 'Ngày SX Thực tế' },
         { key: 'lsx', label: 'Lệnh sản xuất' },
@@ -6015,7 +6046,8 @@ function onVtGhQrScanSuccess_(decodedText) {
         { key: 'bat_dau_thuc_te', label: 'Bắt đầu thực tế' },
         { key: 'ket_thuc_thuc_te', label: 'Kết thúc thực tế' },
         { key: 'ca_sx', label: 'Ca SX' },
-        { key: 'ns_gia_cong', label: 'NS gia công' }
+        { key: 'ns_gia_cong', label: 'NS gia công' },
+        { key: 'tong_sl_gc', label: 'Tổng SL GC' }
       ];
 
       const BAOCAOGC_TYPES_ = ['tien', 'phay', 'nguoi'];
@@ -6038,14 +6070,26 @@ function onVtGhQrScanSuccess_(decodedText) {
           if (btn) btn.classList.toggle('active', t === loai);
           if (pane) pane.style.display = (t === loai) ? 'flex' : 'none';
         });
-        if (!baoCaoGcState_[loai].loaded) loadBaoCaoGcData_(loai);
+        setActiveBaoCaoGcSidebar_(loai);
+        renderBaoCaoGcTable_(loai);
       }
 
-      function loadBaoCaoGcData_(loai) {
+      // Tìm kiếm THEO YÊU CẦU (không tải sẵn toàn bộ sheet - sheet nguồn có thể tới hàng
+      // chục nghìn dòng). Gọi trực tiếp Apps Script -> Google Sheet tương ứng của loại này.
+      function bcgcApplySearch_(loai) {
+        const raw = document.getElementById('bcgcSearchInput-' + loai).value;
+        const clearBtn = document.getElementById('bcgcSearchClear-' + loai);
+        if (clearBtn) clearBtn.style.display = raw ? 'block' : 'none';
+
+        if (!raw || !raw.trim()) {
+          showToast('Vui lòng nhập LSX cần tìm.', 'error');
+          return;
+        }
+
         const statusEl = document.getElementById('bcgcStatus-' + loai);
         const btn = document.getElementById('bcgcRefreshBtn-' + loai);
         if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
-        if (statusEl) statusEl.textContent = 'Đang tải...';
+        if (statusEl) statusEl.textContent = 'Đang tìm...';
 
         google.script.run
           .withSuccessHandler(function(rows) {
@@ -6053,27 +6097,19 @@ function onVtGhQrScanSuccess_(decodedText) {
             baoCaoGcState_[loai].loaded = true;
             if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
             renderBaoCaoGcTable_(loai);
-            showToast('Đã tải ' + baoCaoGcState_[loai].rows.length + ' dòng.', 'success');
+            showToast('Tìm thấy ' + baoCaoGcState_[loai].rows.length + ' dòng.', 'success');
           })
           .withFailureHandler(function(err) {
             if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
-            if (statusEl) statusEl.textContent = 'Lỗi tải dữ liệu.';
-            showToast('Lỗi tải Báo cáo GC: ' + err.message, 'error');
+            if (statusEl) statusEl.textContent = 'Lỗi tìm kiếm.';
+            showToast('Lỗi tìm kiếm Báo cáo GC: ' + err.message, 'error');
           })
-          .getBaoCaoGCData(loai);
+          .searchBaoCaoGC(loai, raw);
       }
 
-      function bcgcApplySearch_(loai) {
-        const raw = document.getElementById('bcgcSearchInput-' + loai).value;
-        baoCaoGcState_[loai].searchTokens = raw.split(/[,;\s]+/)
-          .map(function(s) { return s.trim().toLowerCase(); })
-          .filter(function(s) { return s.length > 0; });
-        const clearBtn = document.getElementById('bcgcSearchClear-' + loai);
-        if (clearBtn) clearBtn.style.display = raw ? 'block' : 'none';
-        renderBaoCaoGcTable_(loai);
-      }
       function bcgcClearSearch_(loai) {
-        baoCaoGcState_[loai].searchTokens = [];
+        baoCaoGcState_[loai].rows = [];
+        baoCaoGcState_[loai].loaded = false;
         document.getElementById('bcgcSearchInput-' + loai).value = '';
         document.getElementById('bcgcSearchClear-' + loai).style.display = 'none';
         renderBaoCaoGcTable_(loai);
@@ -6088,15 +6124,6 @@ function onVtGhQrScanSuccess_(decodedText) {
             if (!allowed.has(normalizeValue(key, r[key]))) return false;
           }
           return true;
-        });
-      }
-
-      function bcgcApplySearchFilter_(loai, rows) {
-        const tokens = baoCaoGcState_[loai].searchTokens;
-        if (!tokens || tokens.length === 0) return rows;
-        return rows.filter(function(r) {
-          const lsxLower = String(r.lsx || '').toLowerCase();
-          return tokens.some(function(tok) { return lsxLower.indexOf(tok) !== -1; });
         });
       }
 
@@ -6121,28 +6148,29 @@ function onVtGhQrScanSuccess_(decodedText) {
         const wrap = document.getElementById('bcgcTableWrap-' + loai);
         if (!wrap) return;
         const cols = bcgcVisibleColumns_(loai);
-
-        let rows = bcgcApplyFilters_(loai, baoCaoGcState_[loai].rows);
-        rows = bcgcApplySearchFilter_(loai, rows);
+        const rows = bcgcApplyFilters_(loai, baoCaoGcState_[loai].rows);
 
         const statusEl = document.getElementById('bcgcStatus-' + loai);
         if (statusEl) {
           statusEl.textContent = baoCaoGcState_[loai].loaded
-            ? ('Hiển thị ' + rows.length + '/' + baoCaoGcState_[loai].rows.length + ' dòng.')
+            ? ('Tìm thấy ' + rows.length + '/' + baoCaoGcState_[loai].rows.length + ' dòng.')
             : '';
         }
 
+        // Luôn vẽ SẴN bảng (header) chiếm trọn khung nhìn - không để khoảng trắng - dù
+        // chưa tìm kiếm hay không có kết quả, giữ đúng cảm giác "app luôn sẵn sàng".
         if (!baoCaoGcState_[loai].loaded) {
-          wrap.innerHTML = '<div class="empty-state-cell">Chưa tải dữ liệu.</div>';
+          wrap.innerHTML = '<table style="width:100%; height:100%;">' + bcgcBuildHeaderHtml_(loai) +
+            '<tr><td colspan="' + cols.length + '" class="empty-state-cell" style="height:65vh;">Nhập LSX và bấm Tìm để xem dữ liệu.</td></tr></table>';
           return;
         }
         if (rows.length === 0) {
-          wrap.innerHTML = '<table>' + bcgcBuildHeaderHtml_(loai) +
-            '<tr><td colspan="' + cols.length + '" class="empty-state-cell">Không có dữ liệu phù hợp.</td></tr></table>';
+          wrap.innerHTML = '<table style="width:100%; height:100%;">' + bcgcBuildHeaderHtml_(loai) +
+            '<tr><td colspan="' + cols.length + '" class="empty-state-cell" style="height:65vh;">Không có dữ liệu phù hợp.</td></tr></table>';
           return;
         }
 
-        let html = '<table>' + bcgcBuildHeaderHtml_(loai);
+        let html = '<table style="width:100%;">' + bcgcBuildHeaderHtml_(loai);
         rows.forEach(function(r) {
           html += '<tr>';
           cols.forEach(function(c) {
