@@ -572,10 +572,13 @@
 
   .app-layout { flex: 1; display: flex; overflow: hidden; min-height: 0; }
   .sidebar {
-    width: 190px; background: #003DA5; color: #fff; display: flex; flex-direction: column;
+    width: 56px; background: #003DA5; color: #fff; display: flex; flex-direction: column;
     transition: width 0.2s ease; flex-shrink: 0; overflow: hidden;
   }
   .sidebar.collapsed { width: 56px; }
+  /* Không còn nút bấm thu/mở - tự mở rộng khi rê chuột vào, tự thu lại khi rê ra ngoài */
+  .sidebar.collapsed:hover { width: 190px; }
+  .sidebar.collapsed:hover .nav-label { display: inline; }
 
   /* ===== Thanh điều hướng dưới cùng - CHỈ dùng cho mobile, thay thế sidebar ===== */
   .mobile-bottom-nav { display: none; }
@@ -1160,17 +1163,17 @@
         thời điểm, khiến 2 cột này bị tính cùng 1 giá trị "left" -> chồng lên nhau, vừa đè chữ
         header vừa che mất các ô Time ĐK nằm bên dưới khiến không bấm nhập được. Độ rộng cố định
         đảm bảo header và dữ liệu LUÔN khớp tuyệt đối. */
-      #tgGcTableWrap .tgGc-stcol-idx {
+          #tgGcTableWrap .tgGc-stcol-idx {
         position: sticky; left: 0; z-index: 3;
         width: 46px; min-width: 46px; max-width: 46px;
         background: #fff; overflow: hidden; text-overflow: ellipsis;
-        isolation: isolate; /* ép layer compositing riêng, tránh hở khe khi cuộn ngang (giống .sticky-col) */
+        isolation: isolate; contain: paint; transform: translateZ(0); will-change: transform;
       }
       #tgGcTableWrap .tgGc-stcol-lsx {
         position: sticky; left: 46px; z-index: 3;
         width: 150px; min-width: 150px; max-width: 150px;
         background: #fff; overflow: hidden; text-overflow: ellipsis;
-        isolation: isolate;
+        isolation: isolate; contain: paint; transform: translateZ(0); will-change: transform;
       }
       #tgGcTableWrap th.tgGc-stcol-idx, #tgGcTableWrap th.tgGc-stcol-lsx {
         z-index: 8; background: #003DA5;
@@ -1449,7 +1452,6 @@
       <nav class="sidebar collapsed" id="mainSidebar">
         <div style="display:flex;">
           <button class="sidebar-toggle" onclick="showHomeMenu_()" title="Về màn hình chọn phần mềm"><i class="fa-solid fa-house"></i></button>
-          <button class="sidebar-toggle" onclick="toggleSidebar()" title="Thu gọn/Mở rộng"><i class="fa-solid fa-angles-left"></i></button>
         </div>
 
         <div id="sidebarTienDoGroup">
@@ -1468,6 +1470,9 @@
           <button class="sidebar-nav-btn" data-tab="tab-khbus" onclick="switchTab('tab-khbus')">
             <i class="fa-solid fa-table"></i><span class="nav-label">KH BUS</span>
           </button>
+          <button class="sidebar-nav-btn" data-tab="tab-baocaogc" onclick="switchTab('tab-baocaogc')">
+            <i class="fa-solid fa-clipboard-list"></i><span class="nav-label">Báo cáo GC</span>
+          </button>
           <div class="sidebar-divider"></div>
           <button type="button" class="sidebar-nav-btn" id="sidebarCategoryToggleBtn" onclick="toggleSidebarCategoryList_()" style="justify-content:space-between; width:100%;">
             <span style="display:flex; align-items:center; gap:10px;"><i class="fa-solid fa-layer-group"></i><span class="nav-label">Loại đơn hàng</span></span>
@@ -1485,9 +1490,6 @@
           </button>
         </div>
 
-        <button type="button" class="sidebar-toggle sidebar-toggle-bottom" onclick="toggleSidebar()" title="Thu gọn/Mở rộng">
-          <i class="fa-solid fa-angles-left" id="sidebarBottomToggleIcon"></i>
-        </button>
       </nav>
 
       <!-- Thanh điều hướng dưới cùng - CHỈ hiện trên mobile (xem media query 768px),
@@ -1510,6 +1512,9 @@
         </button>
         <button class="mobile-nav-btn mobile-nav-tiendo" data-tab="tab-khbus" onclick="switchTab('tab-khbus')">
           <i class="fa-solid fa-table"></i><span>KH BUS</span>
+        </button>
+        <button class="mobile-nav-btn mobile-nav-tiendo" data-tab="tab-baocaogc" onclick="switchTab('tab-baocaogc')">
+          <i class="fa-solid fa-clipboard-list"></i><span>Báo cáo GC</span>
         </button>
         <button class="mobile-nav-btn mobile-nav-nhansu" data-tab="tab-nhansu-dashboard" style="display:none;" onclick="switchTab('tab-nhansu-dashboard')">
           <i class="fa-solid fa-chart-pie"></i><span>Dashboard</span>
@@ -1612,6 +1617,78 @@
             <div id="khbusSlideCanvas" style="flex:1; overflow:auto; padding:20px; background:#eef1f5;"></div>
           </div>
         </div>
+
+        <div id="tab-baocaogc" class="tab-pane" style="flex-direction:column;">
+          <div class="tracking-toolbar" style="flex-wrap:wrap;">
+            <h2 style="margin:0; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <div style="display:flex; gap:8px;">
+                <button type="button" id="bcgcSubTabBtn-tien" class="quick-btn active" onclick="switchBaoCaoGcSubTab_('tien')" style="font-size:14px; padding:8px 16px;">Tiện</button>
+                <button type="button" id="bcgcSubTabBtn-phay" class="quick-btn" onclick="switchBaoCaoGcSubTab_('phay')" style="font-size:14px; padding:8px 16px;">Phay</button>
+                <button type="button" id="bcgcSubTabBtn-nguoi" class="quick-btn" onclick="switchBaoCaoGcSubTab_('nguoi')" style="font-size:14px; padding:8px 16px;">Nguội</button>
+              </div>
+            </h2>
+          </div>
+
+          <div id="bcgcSubTab-tien" class="dash-subtab-pane" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 16px 4px 16px; gap:8px; flex-wrap:wrap;">
+              <div class="search-row" style="flex:1; min-width:260px; margin-bottom:0;">
+                <div class="search-input-wrap">
+                  <input type="text" id="bcgcSearchInput-tien" placeholder="Nhập/dán LSX (nhiều LSX cách nhau bởi dấu phẩy, xuống dòng...)" autocomplete="off"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); bcgcApplySearch_('tien');}"
+                    oninput="document.getElementById('bcgcSearchClear-tien').style.display=this.value?'block':'none';" />
+                  <span id="bcgcSearchClear-tien" class="clear-btn" onclick="bcgcClearSearch_('tien')" style="display:none;">&times;</span>
+                </div>
+                <button type="button" onclick="bcgcApplySearch_('tien')">Tìm</button>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <div id="bcgcStatus-tien" style="font-size:12px; color:#888; white-space:nowrap;"></div>
+                <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_tien')"><i class="fa-solid fa-table-columns"></i></button>
+                <button type="button" id="bcgcRefreshBtn-tien" class="icon-btn" title="Làm mới" onclick="loadBaoCaoGcData_('tien')"><i class="fa-solid fa-arrows-rotate"></i></button>
+              </div>
+            </div>
+            <div id="bcgcTableWrap-tien" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
+          </div>
+
+          <div id="bcgcSubTab-phay" class="dash-subtab-pane" style="display:none; flex-direction:column; flex:1; min-height:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 16px 4px 16px; gap:8px; flex-wrap:wrap;">
+              <div class="search-row" style="flex:1; min-width:260px; margin-bottom:0;">
+                <div class="search-input-wrap">
+                  <input type="text" id="bcgcSearchInput-phay" placeholder="Nhập/dán LSX (nhiều LSX cách nhau bởi dấu phẩy, xuống dòng...)" autocomplete="off"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); bcgcApplySearch_('phay');}"
+                    oninput="document.getElementById('bcgcSearchClear-phay').style.display=this.value?'block':'none';" />
+                  <span id="bcgcSearchClear-phay" class="clear-btn" onclick="bcgcClearSearch_('phay')" style="display:none;">&times;</span>
+                </div>
+                <button type="button" onclick="bcgcApplySearch_('phay')">Tìm</button>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <div id="bcgcStatus-phay" style="font-size:12px; color:#888; white-space:nowrap;"></div>
+                <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_phay')"><i class="fa-solid fa-table-columns"></i></button>
+                <button type="button" id="bcgcRefreshBtn-phay" class="icon-btn" title="Làm mới" onclick="loadBaoCaoGcData_('phay')"><i class="fa-solid fa-arrows-rotate"></i></button>
+              </div>
+            </div>
+            <div id="bcgcTableWrap-phay" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
+          </div>
+
+          <div id="bcgcSubTab-nguoi" class="dash-subtab-pane" style="display:none; flex-direction:column; flex:1; min-height:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 16px 4px 16px; gap:8px; flex-wrap:wrap;">
+              <div class="search-row" style="flex:1; min-width:260px; margin-bottom:0;">
+                <div class="search-input-wrap">
+                  <input type="text" id="bcgcSearchInput-nguoi" placeholder="Nhập/dán LSX (nhiều LSX cách nhau bởi dấu phẩy, xuống dòng...)" autocomplete="off"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); bcgcApplySearch_('nguoi');}"
+                    oninput="document.getElementById('bcgcSearchClear-nguoi').style.display=this.value?'block':'none';" />
+                  <span id="bcgcSearchClear-nguoi" class="clear-btn" onclick="bcgcClearSearch_('nguoi')" style="display:none;">&times;</span>
+                </div>
+                <button type="button" onclick="bcgcApplySearch_('nguoi')">Tìm</button>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <div id="bcgcStatus-nguoi" style="font-size:12px; color:#888; white-space:nowrap;"></div>
+                <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_nguoi')"><i class="fa-solid fa-table-columns"></i></button>
+                <button type="button" id="bcgcRefreshBtn-nguoi" class="icon-btn" title="Làm mới" onclick="loadBaoCaoGcData_('nguoi')"><i class="fa-solid fa-arrows-rotate"></i></button>
+              </div>
+            </div>
+            <div id="bcgcTableWrap-nguoi" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
+          </div>
+        </div><!-- /tab-baocaogc -->
 
         <div id="tab-giaohang2" class="tab-pane">
           <div class="tracking-toolbar">
@@ -2354,6 +2431,12 @@ function confirmModalYes_() {
         document.getElementById('changePassError').textContent = '';
         document.getElementById('changePassOverlay').style.display = 'flex';
         closeUserMenu_();
+
+        // LUÔN kiểm tra lại NGAY LÚC MỞ MODAL (không chỉ dựa vào lúc đăng nhập) - đảm bảo
+        // phần Phân quyền + nút Thêm mục/Thêm người dùng KHÔNG BAO GIỜ lộ ra ở tài khoản
+        // không phải admin, dù applyPermissionsToUI_ có chạy đúng lúc đăng nhập hay không.
+        const permWrap = document.getElementById('permSectionWrap');
+        if (permWrap) permWrap.style.display = isPermAdmin_ ? 'block' : 'none';
         if (isPermAdmin_) loadPermTabs_(function() { loadPermUsers_(false); });
       }
 
@@ -2864,6 +2947,12 @@ function confirmModalYes_() {
           renderVtGhTable_('vtResultWrap', vtRows_, 'nhanvattu');
         } else if (activeFilterTarget === 'gh') {
           renderVtGhTable_('ghResultWrap', ghRows2_, 'giaohang');
+        } else if (activeFilterTarget === 'baocaogc_tien') {
+          renderBaoCaoGcTable_('tien');
+        } else if (activeFilterTarget === 'baocaogc_phay') {
+          renderBaoCaoGcTable_('phay');
+        } else if (activeFilterTarget === 'baocaogc_nguoi') {
+          renderBaoCaoGcTable_('nguoi');
         } else {
           render(applyFilters(lastRows));
         }
@@ -3966,6 +4055,9 @@ function tgGcStickyColClass_(arrIdx) {
           activeTrackingTab_ = null;
           if (!khbusLoaded_) loadKhBusSlides_();
           khbusStartPolling_();
+        } else if (tabId === 'tab-baocaogc') {
+          activeTrackingTab_ = null;
+          if (!baoCaoGcState_.tien.loaded) loadBaoCaoGcData_('tien');
         } else if (tabId === 'tab-nhansu-dashboard') {
           activeTrackingTab_ = null;
           loadNhanSuDashboard_();
@@ -4451,6 +4543,9 @@ function onVtGhQrScanSuccess_(decodedText) {
         if (activeFilterTarget === 'lsxdetail') return { rows: lsxDetailRawRows, filters: lsxDetailFilters };
         if (activeFilterTarget === 'vt') return { rows: vtRows_, filters: vtGhFilters_.nhanvattu };
         if (activeFilterTarget === 'gh') return { rows: ghRows2_, filters: vtGhFilters_.giaohang };
+        if (activeFilterTarget === 'baocaogc_tien') return { rows: baoCaoGcState_.tien.rows, filters: baoCaoGcState_.tien.filters };
+        if (activeFilterTarget === 'baocaogc_phay') return { rows: baoCaoGcState_.phay.rows, filters: baoCaoGcState_.phay.filters };
+        if (activeFilterTarget === 'baocaogc_nguoi') return { rows: baoCaoGcState_.nguoi.rows, filters: baoCaoGcState_.nguoi.filters };
         return { rows: lastRows, filters: filters };
       }
 
@@ -4815,10 +4910,11 @@ function onVtGhQrScanSuccess_(decodedText) {
           const posAttrs = ' data-r="' + rIdx + '" data-c="' + cIdx + '"';
           const hideZero = tgGcShouldHideZero_(col) && tgGcIsZeroVal_(v);
 
-          if (tgGcIsTimeDkCol_(col) && !tgGcIsTotalDkCol_(col) && isPermAdmin_) {
+                   if (tgGcIsTimeDkCol_(col) && !tgGcIsTotalDkCol_(col) && isPermAdmin_) {
             html += '<td' + stickyClsName + posAttrs + ' style="padding:2px;' + totalStyle + '"><input type="number" step="any" value="' + (hideZero ? '' : (v === '' ? '' : v)) +
               '" data-sheetrow="' + r.sheetRow + '" data-col="' + col.index + '" data-idx="' + arrIdx +
-              '" onchange="tgGcSaveTimeDk_(this)" onkeydown="tgGcTimeDkKeydown_(event,this)" style="width:66px; padding:5px; box-sizing:border-box; text-align:center; border:1px solid #ddd; border-radius:4px;" /></td>';
+              '" onmousedown="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){this.blur();}" onchange="tgGcSaveTimeDk_(this)"' +
+              ' style="width:66px; padding:5px; box-sizing:border-box; text-align:center; border:1px solid #ddd; border-radius:4px; position:relative; z-index:1;" /></td>';
           } else if (tgGcIsTienDoCol_(col)) {
             html += '<td' + stickyClsName + posAttrs + ' style="' + totalStyle + '">' + (hideZero ? '' : tgGcFormatTienDo_(v)) + '</td>';
           } else if (tgGcIsTimeGcCol_(col)) {
@@ -4984,6 +5080,11 @@ function onVtGhQrScanSuccess_(decodedText) {
       }
 
       document.getElementById('tgGcTableWrap').addEventListener('mousedown', function(e) {
+        // Bấm THẲNG vào ô input Time ĐK -> để trình duyệt tự lo focus/con trỏ nhập liệu,
+        // KHÔNG chạy logic chọn ô kiểu Excel ở đây nữa (đây chính là nguyên nhân input
+        // mất focus ngay sau khi vừa click, khiến gõ số vào không "ăn").
+        if (e.target.tagName === 'INPUT') return;
+
         const td = e.target.closest('td[data-r]');
         if (!td) return;
         if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
@@ -5883,6 +5984,176 @@ function onVtGhQrScanSuccess_(decodedText) {
         else if (e.key === 'ArrowLeft') { e.preventDefault(); khbusMoveActiveCell_(khbusActiveR, khbusActiveC - 1); }
         else if (e.key === 'ArrowRight' || e.key === 'Tab') { e.preventDefault(); khbusMoveActiveCell_(khbusActiveR, khbusActiveC + 1); }
       });
+
+            /* ================= BÁO CÁO GIA CÔNG (Tiện / Phay / Nguội) ================= */
+      const BAOCAOGC_COLUMNS_ = [
+        { key: 'ma_id', label: 'Mã ID' },
+        { key: 'kh_may', label: 'KH máy' },
+        { key: 'ngay_sx_thuc_te', label: 'Ngày SX Thực tế' },
+        { key: 'lsx', label: 'Lệnh sản xuất' },
+        { key: 'san_pham', label: 'Sản phẩm' },
+        { key: 'stt_kanban', label: 'STT Kanban' },
+        { key: 'ma_so', label: 'Mã số' },
+        { key: 'ten_chi_tiet', label: 'Tên chi tiết' },
+        { key: 'vat_lieu', label: 'Vật liệu' },
+        { key: 'dai', label: 'Dài' },
+        { key: 'rong', label: 'Rộng' },
+        { key: 'day', label: 'Dày' },
+        { key: 'hinh', label: 'Hình' },
+        { key: 'dn', label: 'Dn' },
+        { key: 'dt', label: 'Dt' },
+        { key: 'sl_dh', label: 'SL/ĐH' },
+        { key: 'sl_gv', label: 'SL GV' },
+        { key: 'kl', label: 'KL' },
+        { key: 'cycle_time', label: 'Cycle time' },
+        { key: 'so_phoi_lan_cat', label: 'Số phôi/lần cắt' },
+        { key: 'tg_gc_phut', label: 'Thời gian gia công (phút)' },
+        { key: 'tg_gc', label: 'Thời gian gia công' },
+        { key: 'bat_dau_du_kien', label: 'Bắt đầu dự kiến' },
+        { key: 'ket_thuc_du_kien', label: 'Kết thúc dự kiến' },
+        { key: 'tg_giao_viec', label: 'Thời gian giao việc' },
+        { key: 'bat_dau_thuc_te', label: 'Bắt đầu thực tế' },
+        { key: 'ket_thuc_thuc_te', label: 'Kết thúc thực tế' },
+        { key: 'ca_sx', label: 'Ca SX' },
+        { key: 'ns_gia_cong', label: 'NS gia công' }
+      ];
+
+      const BAOCAOGC_TYPES_ = ['tien', 'phay', 'nguoi'];
+      const baoCaoGcState_ = {
+        tien:  { rows: [], loaded: false, filters: {}, searchTokens: [] },
+        phay:  { rows: [], loaded: false, filters: {}, searchTokens: [] },
+        nguoi: { rows: [], loaded: false, filters: {}, searchTokens: [] }
+      };
+
+      BAOCAOGC_TYPES_.forEach(function(loai) {
+        registerColvisTable_('baocaogc_' + loai, BAOCAOGC_COLUMNS_,
+          'gcck_colvis_baocaogc_' + loai + '_v1',
+          function() { renderBaoCaoGcTable_(loai); });
+      });
+
+      function switchBaoCaoGcSubTab_(loai) {
+        BAOCAOGC_TYPES_.forEach(function(t) {
+          const btn = document.getElementById('bcgcSubTabBtn-' + t);
+          const pane = document.getElementById('bcgcSubTab-' + t);
+          if (btn) btn.classList.toggle('active', t === loai);
+          if (pane) pane.style.display = (t === loai) ? 'flex' : 'none';
+        });
+        if (!baoCaoGcState_[loai].loaded) loadBaoCaoGcData_(loai);
+      }
+
+      function loadBaoCaoGcData_(loai) {
+        const statusEl = document.getElementById('bcgcStatus-' + loai);
+        const btn = document.getElementById('bcgcRefreshBtn-' + loai);
+        if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+        if (statusEl) statusEl.textContent = 'Đang tải...';
+
+        google.script.run
+          .withSuccessHandler(function(rows) {
+            baoCaoGcState_[loai].rows = rows || [];
+            baoCaoGcState_[loai].loaded = true;
+            if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+            renderBaoCaoGcTable_(loai);
+            showToast('Đã tải ' + baoCaoGcState_[loai].rows.length + ' dòng.', 'success');
+          })
+          .withFailureHandler(function(err) {
+            if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+            if (statusEl) statusEl.textContent = 'Lỗi tải dữ liệu.';
+            showToast('Lỗi tải Báo cáo GC: ' + err.message, 'error');
+          })
+          .getBaoCaoGCData(loai);
+      }
+
+      function bcgcApplySearch_(loai) {
+        const raw = document.getElementById('bcgcSearchInput-' + loai).value;
+        baoCaoGcState_[loai].searchTokens = raw.split(/[,;\s]+/)
+          .map(function(s) { return s.trim().toLowerCase(); })
+          .filter(function(s) { return s.length > 0; });
+        const clearBtn = document.getElementById('bcgcSearchClear-' + loai);
+        if (clearBtn) clearBtn.style.display = raw ? 'block' : 'none';
+        renderBaoCaoGcTable_(loai);
+      }
+      function bcgcClearSearch_(loai) {
+        baoCaoGcState_[loai].searchTokens = [];
+        document.getElementById('bcgcSearchInput-' + loai).value = '';
+        document.getElementById('bcgcSearchClear-' + loai).style.display = 'none';
+        renderBaoCaoGcTable_(loai);
+      }
+
+      function bcgcApplyFilters_(loai, rows) {
+        const filtersObj = baoCaoGcState_[loai].filters;
+        return rows.filter(function(r) {
+          for (const key in filtersObj) {
+            const allowed = filtersObj[key];
+            if (!allowed) continue;
+            if (!allowed.has(normalizeValue(key, r[key]))) return false;
+          }
+          return true;
+        });
+      }
+
+      function bcgcApplySearchFilter_(loai, rows) {
+        const tokens = baoCaoGcState_[loai].searchTokens;
+        if (!tokens || tokens.length === 0) return rows;
+        return rows.filter(function(r) {
+          const lsxLower = String(r.lsx || '').toLowerCase();
+          return tokens.some(function(tok) { return lsxLower.indexOf(tok) !== -1; });
+        });
+      }
+
+      function bcgcVisibleColumns_(loai) {
+        return BAOCAOGC_COLUMNS_.filter(function(c) { return isGenericColVisible_('baocaogc_' + loai, c.key); });
+      }
+
+      function bcgcBuildHeaderHtml_(loai) {
+        const filtersObj = baoCaoGcState_[loai].filters;
+        let html = '<tr>';
+        bcgcVisibleColumns_(loai).forEach(function(col) {
+          const activeCls = filtersObj[col.key] ? ' active' : '';
+          html += '<th>' + col.label +
+            '<span class="filter-icon' + activeCls + '" onclick="openFilterPopup(\'' + col.key + '\', this, \'baocaogc_' + loai + '\')">&#9662;</span>' +
+            '</th>';
+        });
+        html += '</tr>';
+        return html;
+      }
+
+      function renderBaoCaoGcTable_(loai) {
+        const wrap = document.getElementById('bcgcTableWrap-' + loai);
+        if (!wrap) return;
+        const cols = bcgcVisibleColumns_(loai);
+
+        let rows = bcgcApplyFilters_(loai, baoCaoGcState_[loai].rows);
+        rows = bcgcApplySearchFilter_(loai, rows);
+
+        const statusEl = document.getElementById('bcgcStatus-' + loai);
+        if (statusEl) {
+          statusEl.textContent = baoCaoGcState_[loai].loaded
+            ? ('Hiển thị ' + rows.length + '/' + baoCaoGcState_[loai].rows.length + ' dòng.')
+            : '';
+        }
+
+        if (!baoCaoGcState_[loai].loaded) {
+          wrap.innerHTML = '<div class="empty-state-cell">Chưa tải dữ liệu.</div>';
+          return;
+        }
+        if (rows.length === 0) {
+          wrap.innerHTML = '<table>' + bcgcBuildHeaderHtml_(loai) +
+            '<tr><td colspan="' + cols.length + '" class="empty-state-cell">Không có dữ liệu phù hợp.</td></tr></table>';
+          return;
+        }
+
+        let html = '<table>' + bcgcBuildHeaderHtml_(loai);
+        rows.forEach(function(r) {
+          html += '<tr>';
+          cols.forEach(function(c) {
+            const v = r[c.key];
+            html += '<td>' + (v === null || v === undefined || v === '' ? '' : escapeHtml_(String(v))) + '</td>';
+          });
+          html += '</tr>';
+        });
+        html += '</table>';
+        wrap.innerHTML = html;
+      }
 
       /* ================= DASHBOARD TIẾN ĐỘ ĐƠN HÀNG (CHO QUẢN LÝ) ================= */
       const DASHBOARD_COLVIS_COLUMNS_ = [
