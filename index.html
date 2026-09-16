@@ -363,7 +363,7 @@
         border: 1px solid #ccc;
         border-radius: 6px;
         box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-        z-index: 50;
+        z-index: 260; /* phải cao hơn .colvis-overlay (200) để không bị đè khi mở filter trong 1 modal như "Chi tiết chưa giao" */
         padding: 8px;
         font-size: 13px;
         color: #333;
@@ -1164,11 +1164,13 @@
         position: sticky; left: 0; z-index: 3;
         width: 46px; min-width: 46px; max-width: 46px;
         background: #fff; overflow: hidden; text-overflow: ellipsis;
+        isolation: isolate; /* ép layer compositing riêng, tránh hở khe khi cuộn ngang (giống .sticky-col) */
       }
       #tgGcTableWrap .tgGc-stcol-lsx {
         position: sticky; left: 46px; z-index: 3;
         width: 150px; min-width: 150px; max-width: 150px;
         background: #fff; overflow: hidden; text-overflow: ellipsis;
+        isolation: isolate;
       }
       #tgGcTableWrap th.tgGc-stcol-idx, #tgGcTableWrap th.tgGc-stcol-lsx {
         z-index: 8; background: #003DA5;
@@ -1211,9 +1213,12 @@
     const SUPABASE_ANON_KEY_ = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhia2RxaGxjaW1tcml3Y3l4ZHBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxOTQ3OTcsImV4cCI6MjEwMjc3MDc5N30.ihDLc_P38OY8SOBmrjBRVrxSpnOuQIml69gEieoMwo8';
 
     function callServer_(fnName, args, retriesLeft) {
-      if (retriesLeft === undefined) retriesLeft = 2; // tổng cộng thử tối đa 3 lần
+      if (retriesLeft === undefined) retriesLeft = 1; // tổng cộng thử tối đa 2 lần
       const controller = new AbortController();
-      const timeoutId = setTimeout(function() { controller.abort(); }, 20000);
+      // Apps Script có thể "cold start" 15-25s khi lâu chưa ai gọi. Timeout cũ (20s) hay bị
+      // hủy giữa lúc server sắp xong, rồi thử lại = 1 lượt chạy MỚI (lại cold start từ đầu)
+      // -> lặp vô ích, đúng nguyên nhân "chờ rất lâu mà vẫn không đăng nhập được".
+      const timeoutId = setTimeout(function() { controller.abort(); }, 35000);
 
       return fetch(API_URL, {
         method: 'POST',
@@ -1265,6 +1270,13 @@
     window.google = window.google || {};
     window.google.script = window.google.script || {};
     Object.defineProperty(window.google.script, 'run', { get: createScriptRunProxy_ });
+
+    // "Đánh thức" Apps Script NGAY khi vừa mở trang, trong lúc người dùng còn gõ MSNV/mật
+    // khẩu - để tới lúc bấm "Đăng nhập" thì server đã tỉnh sẵn, không còn bị cold start
+    // (nguyên nhân chính gây "Failed to fetch" / chờ rất lâu ở màn đăng nhập).
+    (function warmUpServer_() {
+      callServer_('getLastSyncTime', []).catch(function() { /* im lặng, chỉ để làm nóng */ });
+    })();
   </script>
 
     <div id="loginOverlay" class="splash-overlay" style="z-index:600;">
@@ -4806,7 +4818,7 @@ function onVtGhQrScanSuccess_(decodedText) {
           if (tgGcIsTimeDkCol_(col) && !tgGcIsTotalDkCol_(col) && isPermAdmin_) {
             html += '<td' + stickyClsName + posAttrs + ' style="padding:2px;' + totalStyle + '"><input type="number" step="any" value="' + (hideZero ? '' : (v === '' ? '' : v)) +
               '" data-sheetrow="' + r.sheetRow + '" data-col="' + col.index + '" data-idx="' + arrIdx +
-              '" onchange="tgGcSaveTimeDk_(this)" style="width:66px; padding:5px; box-sizing:border-box; text-align:center; border:1px solid #ddd; border-radius:4px;" /></td>';
+              '" onchange="tgGcSaveTimeDk_(this)" onkeydown="tgGcTimeDkKeydown_(event,this)" style="width:66px; padding:5px; box-sizing:border-box; text-align:center; border:1px solid #ddd; border-radius:4px;" /></td>';
           } else if (tgGcIsTienDoCol_(col)) {
             html += '<td' + stickyClsName + posAttrs + ' style="' + totalStyle + '">' + (hideZero ? '' : tgGcFormatTienDo_(v)) + '</td>';
           } else if (tgGcIsTimeGcCol_(col)) {
@@ -5033,6 +5045,84 @@ function onVtGhQrScanSuccess_(decodedText) {
           })
           .withFailureHandler(function(err) { showToast('Lỗi lưu Time ĐK: ' + err.message, 'error'); loadThoiGianGC_(); })
           .saveThoiGianGCTimeDK(currentUser_.msnv, sheetRow, sheetCol, value);
+      }
+
+      /* ===== Điền nhanh nhiều ô Time ĐK cùng lúc (kiểu Excel): bôi chọn 1 vùng nhiều ô
+        Time ĐK -> gõ 1 giá trị -> Enter -> áp dụng cho TẤT CẢ ô đang chọn, tự tính lại
+        "Tổng" và lưu xuống server cho từng dòng bị ảnh hưởng. ===== */
+      function tgGcTimeDkKeydown_(e, inputEl) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const td = inputEl.closest('td[data-r]');
+        if (!td) { inputEl.blur(); return; }
+        const r = Number(td.getAttribute('data-r')), c = Number(td.getAttribute('data-c'));
+
+        const selectedCells = [];
+        tgGcSelRegions.forEach(function(reg) {
+          for (let rr = reg.r1; rr <= reg.r2; rr++) {
+            for (let cc = reg.c1; cc <= reg.c2; cc++) selectedCells.push({ r: rr, c: cc });
+          }
+        });
+        // Chỉ coi là "điền nhiều ô" khi vùng đang chọn CÓ chứa đúng ô vừa gõ và có > 1 ô.
+        const isMultiSelect = selectedCells.length > 1 &&
+          selectedCells.some(function(p) { return p.r === r && p.c === c; });
+
+        if (isMultiSelect) {
+          tgGcFillTimeDkToSelection_(inputEl.value.trim(), selectedCells);
+        } else {
+          inputEl.blur(); // chỉ 1 ô -> để onchange lưu bình thường như trước
+        }
+      }
+
+      function tgGcFillTimeDkToSelection_(value, selectedCells) {
+        if (!isPermAdmin_) { showToast('Bạn không có quyền chỉnh sửa Time ĐK.', 'error'); return; }
+
+        const visCols = tgGcVisibleColumns_();
+        const updates = [];          // { sheetRow, sheetCol }
+        const affectedRows = new Set();
+
+        selectedCells.forEach(function(pos) {
+          const col = visCols[pos.c];
+          if (!col || !tgGcIsTimeDkCol_(col) || tgGcIsTotalDkCol_(col)) return; // chỉ nhận ô Time ĐK sửa được
+          const rowData = tgGcRenderRowsRef_[pos.r];
+          if (!rowData) return;
+          const arrIdx = tgGcColumns_.indexOf(col);
+          rowData.values[arrIdx] = value === '' ? '' : Number(value);
+          updates.push({ sheetRow: rowData.sheetRow, sheetCol: col.index });
+          affectedRows.add(rowData.sheetRow);
+        });
+
+        if (updates.length === 0) {
+          showToast('Vùng đang chọn không có ô Time ĐK hợp lệ để điền.', 'info');
+          return;
+        }
+
+        // Cập nhật lạc quan TỔNG Time ĐK cho từng dòng bị ảnh hưởng rồi vẽ lại bảng ngay.
+        const totalArrIdx = tgGcColumns_.findIndex(function(c) { return tgGcIsTotalDkCol_(c); });
+        affectedRows.forEach(function(sheetRow) {
+          const rowData = tgGcRows_.find(function(r2) { return r2.sheetRow === sheetRow; });
+          if (rowData && totalArrIdx !== -1) rowData.values[totalArrIdx] = tgGcSumTimeDkForRow_(sheetRow);
+        });
+        tgGcSaveCache_({ columns: tgGcColumns_, rows: tgGcRows_, lsxArrayIndex: tgGcLsxArrayIndex_ });
+        renderThoiGianGC_();
+        showToast('Đang lưu ' + updates.length + ' ô Time ĐK...', 'info');
+
+        // saveThoiGianGCTimeDK chỉ nhận 1 ô/lần -> gọi tuần tự cho từng ô trong vùng chọn.
+        let doneCount = 0, errorCount = 0;
+        function saveNext(i) {
+          if (i >= updates.length) {
+            if (errorCount === 0) showToast('Đã lưu ' + doneCount + ' ô Time ĐK.', 'success');
+            else showToast('Đã lưu ' + doneCount + ' ô, lỗi ' + errorCount + ' ô.', 'error');
+            loadThoiGianGC_(); // đồng bộ lại đúng giá trị thật (kể cả "Tổng" nếu Sheet có công thức)
+            return;
+          }
+          const u = updates[i];
+          google.script.run
+            .withSuccessHandler(function() { doneCount++; saveNext(i + 1); })
+            .withFailureHandler(function() { errorCount++; saveNext(i + 1); })
+            .saveThoiGianGCTimeDK(currentUser_.msnv, u.sheetRow, u.sheetCol, value);
+        }
+        saveNext(0);
       }
 
       function tgGcOpenFilter_(arrIdx, iconEl) {
@@ -8914,7 +9004,10 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         splashEl.style.opacity = '0';
         splashEl.style.display = 'none';
         document.getElementById('loginOverlay').style.display = 'flex';
-        errEl.textContent = err.message;
+        const isNetworkErr = /fetch|abort/i.test(String(err && err.message || ''));
+        errEl.textContent = isNetworkErr
+          ? 'Không kết nối được máy chủ (mạng chậm hoặc server đang khởi động). Vui lòng thử đăng nhập lại.'
+          : err.message;
       }
 
       if (isNewAccount) {
