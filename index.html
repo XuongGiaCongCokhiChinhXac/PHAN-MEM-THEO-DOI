@@ -618,7 +618,7 @@
       .tracking-table-wrap th, .tracking-table-wrap td {
         border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;
         padding: 6px 8px; text-align: center; box-sizing: border-box;
-        vertical-align: middle;
+        vertical-align: middle; white-space: nowrap;
       }
       #dashTable td { height: 48px; }
       .tracking-table-wrap tr td:first-child, .tracking-table-wrap tr th:first-child { border-left: 1px solid #ddd; }
@@ -1197,6 +1197,15 @@
       .perm-table th.perm-thead-r1 { top: 0; z-index: 7; }
       .perm-table th.perm-thead-r2 { top: 32px; z-index: 6; }
       .perm-table td { border: 1px solid #ddd; }
+
+            /* ===== KH BUS: cố định header 2 dòng khi cuộn + tránh khe hở (giống bảng phân quyền) ===== */
+      .khbus-header-table { border-collapse: separate; border-spacing: 0; }
+      .khbus-header-table th {
+        height: 34px; box-sizing: border-box; position: sticky; z-index: 5;
+        border: 1px solid #0c2f6e; background: #1a56c4; color: #fff;
+      }
+      .khbus-header-table th.khbus-thead-r1 { top: 0; z-index: 8; }
+      .khbus-header-table th.khbus-thead-r2 { top: 34px; z-index: 7; }
 
       /* ===== Modal thêm mục phân quyền / thêm người dùng ===== */
       .simple-modal-field { margin-bottom: 14px; }
@@ -1800,7 +1809,7 @@
                 <button type="button" id="tgGcRefreshBtn" class="icon-btn" title="Làm mới" onclick="loadThoiGianGC_(true)"><i class="fa-solid fa-arrows-rotate"></i></button>
               </div>
             </div>
-            <div id="tgGcTableWrap" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
+            <div id="tgGcTableWrap" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 0;"></div>
           </div>
 
         <div id="tab-nhansu-dashboard" class="tab-pane" style="flex-direction:column; overflow:auto;">
@@ -1987,6 +1996,7 @@ function confirmModalYes_() {
       // sheet "Người dùng" của bạn vào đây (VD "Quản Đốc") nếu tài khoản bạn không phải "Quản lý".
       const SUPER_ADMIN_MSNV_ = '22091370'; // Nguyễn Trương Thanh Tuấn - duy nhất thấy mục Phân quyền
       let isPermAdmin_ = false;
+      let isTgGcAdmin_ = false; // Quyền sửa cột Time ĐK: Super Admin HOẶC chức vụ Quản lý/ADMIN (khớp điều kiện server trong saveThoiGianGCTimeDK)
       let permUsersCache_ = null;
       const PERM_LIST_CACHE_KEY_ = 'gcck_perm_users_cache_v1';
 
@@ -2000,6 +2010,8 @@ function confirmModalYes_() {
         // "Chức vụ" trên Sheet gõ lệch 1 chút (VD "quản lý") khiến tài khoản quản lý thật sự
         // không được nhận diện, làm ô Time ĐK hiện dạng chữ thường thay vì ô nhập được.
         isPermAdmin_ = !!(currentUser_ && String(currentUser_.msnv || '').trim() === SUPER_ADMIN_MSNV_);
+        const tgGcChucVu_ = String((currentUser_ && currentUser_.chucVu) || '').trim().toLowerCase();
+        isTgGcAdmin_ = isPermAdmin_ || tgGcChucVu_ === 'quản lý' || tgGcChucVu_ === 'admin';
         const permWrap = document.getElementById('permSectionWrap');
         if (permWrap) permWrap.style.display = isPermAdmin_ ? 'block' : 'none';
 
@@ -4942,7 +4954,7 @@ function onVtGhQrScanSuccess_(decodedText) {
           const posAttrs = ' data-r="' + rIdx + '" data-c="' + cIdx + '"';
           const hideZero = tgGcShouldHideZero_(col) && tgGcIsZeroVal_(v);
 
-                   if (tgGcIsTimeDkCol_(col) && !tgGcIsTotalDkCol_(col) && isPermAdmin_) {
+                   if (tgGcIsTimeDkCol_(col) && !tgGcIsTotalDkCol_(col) && isTgGcAdmin_) {
             html += '<td' + stickyClsName + posAttrs + ' style="padding:2px;' + totalStyle + '"><input type="number" step="any" value="' + (hideZero ? '' : (v === '' ? '' : v)) +
               '" data-sheetrow="' + r.sheetRow + '" data-col="' + col.index + '" data-idx="' + arrIdx +
               '" onmousedown="event.stopPropagation()" onkeydown="if(event.key===\'Enter\'){this.blur();}" onchange="tgGcSaveTimeDk_(this)"' +
@@ -5153,7 +5165,7 @@ function onVtGhQrScanSuccess_(decodedText) {
       }
 
       function tgGcSaveTimeDk_(inputEl) {
-        if (!isPermAdmin_) { showToast('Bạn không có quyền chỉnh sửa Time ĐK.', 'error'); return; }
+        if (!isTgGcAdmin_) { showToast('Bạn không có quyền chỉnh sửa Time ĐK.', 'error'); return; }
         const sheetRow = Number(inputEl.getAttribute('data-sheetrow'));
         const sheetCol = Number(inputEl.getAttribute('data-col'));
         const idx = Number(inputEl.getAttribute('data-idx'));
@@ -5208,7 +5220,7 @@ function onVtGhQrScanSuccess_(decodedText) {
       }
 
       function tgGcFillTimeDkToSelection_(value, selectedCells) {
-        if (!isPermAdmin_) { showToast('Bạn không có quyền chỉnh sửa Time ĐK.', 'error'); return; }
+        if (!isTgGcAdmin_) { showToast('Bạn không có quyền chỉnh sửa Time ĐK.', 'error'); return; }
 
         const visCols = tgGcVisibleColumns_();
         const updates = [];          // { sheetRow, sheetCol }
@@ -5617,20 +5629,20 @@ function onVtGhQrScanSuccess_(decodedText) {
           khbusEditableCell_(s.subtitle, 'subtitle', 'font-size:16px; font-weight:700; color:' + subtitleColor + '; text-align:center;') +
         '</div>';
 
-        html += '<table style="width:100%; border-collapse:collapse; font-size:12px; text-align:center;">';
+        html += '<table class="khbus-header-table" style="width:100%; font-size:12px; text-align:center;">';
         html += '<tr>' +
-          '<th rowspan="2" style="background:#1a56c4; color:#fff; border:1px solid #ccc; padding:6px; width:26px;"></th>' +
-          '<th rowspan="2" style="background:#1a56c4; color:#fff; border:1px solid #ccc; padding:6px;">LOẠI XE</th>' +
-          '<th rowspan="2" style="background:#1a56c4; color:#fff; border:1px solid #ccc; padding:6px;">SL ĐH</th>' +
+          '<th class="khbus-thead-r1" rowspan="2" style="width:26px;"></th>' +
+          '<th class="khbus-thead-r1" rowspan="2">LOẠI XE</th>' +
+          '<th class="khbus-thead-r1" rowspan="2">SL ĐH</th>' +
           KHBUS_GROUPS_.map(function(g) {
-            return '<th colspan="3" style="background:#1a56c4; color:#fff; border:1px solid #ccc; padding:6px;">' + g + '</th>';
+            return '<th class="khbus-thead-r1" colspan="3">' + g + '</th>';
           }).join('') +
-          '<th rowspan="2" style="background:#1a56c4; color:#fff; border:1px solid #ccc; padding:6px; width:34px;"></th>' +
+          '<th class="khbus-thead-r1" rowspan="2" style="width:34px;"></th>' +
         '</tr><tr>' +
           KHBUS_GROUPS_.map(function() {
-            return '<th style="background:#1a56c4; color:#fff; border:1px solid #ccc; padding:4px; font-size:11px;">KH nhận</th>' +
-                   '<th style="background:#1a56c4; color:#fff; border:1px solid #ccc; padding:4px; font-size:11px;">LSX</th>' +
-                   '<th style="background:#1a56c4; color:#fff; border:1px solid #ccc; padding:4px; font-size:11px;">XÁC NHẬN</th>';
+            return '<th class="khbus-thead-r2" style="font-size:11px;">KH nhận</th>' +
+                   '<th class="khbus-thead-r2" style="font-size:11px;">LSX</th>' +
+                   '<th class="khbus-thead-r2" style="font-size:11px;">XÁC NHẬN</th>';
           }).join('') +
         '</tr>';
 
@@ -5641,7 +5653,7 @@ function onVtGhQrScanSuccess_(decodedText) {
         // white-space:normal ép lại rule "nowrap" toàn cục (áp dụng cho MỌI table/td trong app)
         // - chính nó là nguyên nhân bảng KH BUS bị đẩy tràn/khuyết cột sang phải khi có ô
         // chứa chữ dài. max-width để mọi ô có kích thước đồng đều, không phụ thuộc độ dài nội dung.
-        const KHBUS_BASE_TD_STYLE_ = 'border:1px solid #ccc; padding:4px; max-width:220px; white-space:normal; word-break:break-word; vertical-align:top; text-align:center;';
+        const KHBUS_BASE_TD_STYLE_ = 'border:1px solid #ccc; padding:4px; max-width:220px; white-space:normal; word-break:break-word; vertical-align:middle; text-align:center;';
 
         function khbusTdStyle_(rIdx, cIdx, baseStyle) {
           const custom = khbusColorMap_[rIdx + '_' + cIdx];
