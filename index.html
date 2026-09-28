@@ -1228,8 +1228,27 @@
     const SUPABASE_URL_DIRECT_ = 'https://xbkdqhlcimmriwcyxdpf.supabase.co';
     const SUPABASE_ANON_KEY_ = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhia2RxaGxjaW1tcml3Y3l4ZHBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxOTQ3OTcsImV4cCI6MjEwMjc3MDc5N30.ihDLc_P38OY8SOBmrjBRVrxSpnOuQIml69gEieoMwo8';
 
+    // ===== Xử lý hết hạn mức urlfetch của Google =====
+    let quotaBlockedUntil_ = 0;
+    const QUOTA_SILENT_FUNCTIONS_ = ['heartbeatOnline', 'getNotifications', 'getLastSyncTime',
+      'getLastSyncTimeTienDo', 'getOnlineUsersList'];
+
+    function friendlyServerError_(msg) {
+      const text = String(msg || '');
+      if (/urlfetch|quá nhiều lần|too many times/i.test(text)) {
+        quotaBlockedUntil_ = Date.now() + 10 * 60 * 1000; // tạm dừng các lệnh ngầm 10 phút
+        return 'Hệ thống đã dùng hết hạn mức truy cập trong ngày của Google. ' +
+               'Hạn mức tự khôi phục lúc khoảng 14h00 mỗi ngày. Vui lòng thử lại sau.';
+      }
+      return text;
+    }
+
     function callServer_(fnName, args, retriesLeft) {
       if (retriesLeft === undefined) retriesLeft = 1; // tổng cộng thử tối đa 2 lần
+      // Đang bị chặn hạn mức -> các lệnh gọi ngầm (poll/heartbeat) không gửi đi nữa
+      if (Date.now() < quotaBlockedUntil_ && QUOTA_SILENT_FUNCTIONS_.indexOf(fnName) !== -1) {
+        return Promise.reject(new Error('Tạm dừng do hết hạn mức'));
+      }
       const controller = new AbortController();
       // Apps Script có thể "cold start" 15-25s khi lâu chưa ai gọi. Timeout cũ (20s) hay bị
       // hủy giữa lúc server sắp xong, rồi thử lại = 1 lượt chạy MỚI (lại cold start từ đầu)
@@ -1246,7 +1265,7 @@
       })
         .then(function(res) { clearTimeout(timeoutId); return res.json(); })
         .then(function(data) {
-          if (!data.ok) throw new Error(data.error);
+          if (!data.ok) throw new Error(friendlyServerError_(data.error));
           return data.result;
         })
         .catch(function(err) {
@@ -2126,10 +2145,10 @@ function confirmModalYes_() {
       }
       // ====== HẾT PHẦN PHÂN QUYỀN ======
 
-      const ONLINE_HEARTBEAT_MS = 120000; // 2 phút - đủ để hiện số người online, giảm mạnh số lệnh gọi/ngày
+      const ONLINE_HEARTBEAT_MS = 300000; // 5 phút - giảm mạnh số lượt urlfetch/ngày
 
            function sendHeartbeat_() {
-          if (!currentUser_) return;
+          if (!currentUser_ || document.hidden) return; // tab đang ẩn thì không báo online, đỡ tốn lượt
           google.script.run
           .withSuccessHandler(function(count) {
             const badge = document.getElementById('onlineBadge');
@@ -2368,7 +2387,7 @@ function confirmModalYes_() {
           .getNotifications(0);
       }
 
-      const NOTIF_POLL_MS = 60000; // 60 giây - thông báo Gấp/Ưu tiên vẫn đủ nhanh, giảm thêm số lệnh gọi/ngày
+      const NOTIF_POLL_MS = 180000; // 3 phút - thông báo Gấp/Ưu tiên vẫn đủ nhanh, giảm mạnh số lệnh gọi/ngày
       function pollNotifications_() {
         if (document.hidden) return; // tab đang ẩn -> bỏ qua, khi mở lại visibilitychange đã tự lấy bù
         google.script.run
@@ -2632,7 +2651,7 @@ function confirmModalYes_() {
       let pollTimer = null;
       let searchRequestId = 0;       // dùng để bỏ qua kết quả trả về trễ/đã bị hủy
       const categoryCache = {};      // prefix -> rows, hiện ngay lập tức lần bấm sau (SWR)
-      const POLL_INTERVAL_MS = 120000; // tăng lên 120s - giảm thêm số lệnh gọi Supabase/ngày cho tra cứu
+      const POLL_INTERVAL_MS = 300000; // 5 phút - giảm mạnh số lệnh gọi/ngày cho tra cứu
 
       /* ================= CHỌN Ô KIỂU EXCEL (hỗ trợ Ctrl+Click / Shift+Click) ================= */
       let displayedRows = [];   // danh sách dòng đang hiển thị (sau lọc) theo đúng thứ tự trên bảng
@@ -3557,6 +3576,9 @@ function tgGcStickyColClass_(arrIdx) {
         stopPolling();
         if (!currentQuery) return;
         if (document.hidden) return; // tab đang ẩn (chuyển app khác/khóa máy) -> không poll vô ích
+        // Xem theo LOẠI ĐƠN (BUS, GHE...) có thể lên tới hàng chục nghìn dòng -> mỗi lần poll
+        // tốn hàng chục lượt urlfetch. Không tự poll ở chế độ này, người dùng bấm "Làm mới" khi cần.
+        if (currentQueryMode === 'prefix') return;
         pollTimer = setInterval(pollForUpdates, POLL_INTERVAL_MS);
       }
 
@@ -4022,7 +4044,7 @@ function tgGcStickyColClass_(arrIdx) {
       }
 
       /* ================= TRẠNG THÁI ĐỒNG BỘ SHEET -> SUPABASE ================= */
-      const SYNC_STATUS_REFRESH_MS = 30000; // 30 giây tự làm mới 1 lần
+      const SYNC_STATUS_REFRESH_MS = 120000; // 2 phút tự làm mới 1 lần
 
       function renderSyncStatus_(iso) {
         const el = document.getElementById('syncStatus');
