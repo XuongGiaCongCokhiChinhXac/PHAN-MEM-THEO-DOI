@@ -1207,17 +1207,51 @@
       .khbus-header-table th.khbus-thead-r1 { top: 0; z-index: 8; }
       .khbus-header-table th.khbus-thead-r2 { top: 34px; z-index: 7; }
 
-            /* ===== Bảng Báo cáo GC (Tiện/Phay/Nguội): gọn, vừa đủ thông tin ===== */
-      .tracking-table-wrap .bcgc-table { width: auto; min-width: 0; font-size: 12px; }
+            /* ===== Bảng Báo cáo GC (Tiện/Phay/Nguội) ===== */
+      /* width:100% -> khi ẩn bớt cột, phần trống tự chia đều vào các cột còn lại */
+      .tracking-table-wrap .bcgc-table { width: 100%; min-width: 0; font-size: 12px; }
       .tracking-table-wrap .bcgc-table th {
         white-space: normal; line-height: 1.25; padding: 6px 6px;
         vertical-align: middle; text-align: center;
       }
-      .tracking-table-wrap .bcgc-table td { padding: 5px 6px; white-space: nowrap; }
-      /* Header được phép xuống dòng khi nhãn dài (VD "Time GC (phút)") */
+      .tracking-table-wrap .bcgc-table td { padding: 5px 6px; white-space: nowrap; user-select: none; }
       .bcgc-th-label { max-width: 78px; margin: 0 auto; white-space: normal; word-break: break-word; }
       .tracking-table-wrap .bcgc-table td.bcgc-bold { font-weight: 700; }
       .tracking-table-wrap .bcgc-table th.bcgc-bold { font-weight: 800; }
+      /* Màu xen kẽ trắng / xanh nhạt */
+      .tracking-table-wrap .bcgc-table tr:nth-child(odd) td { background: #f2f7ff; }
+      .tracking-table-wrap .bcgc-table tr:nth-child(even) td { background: #fff; }
+      /* Hàng chứa ô đang chọn sáng xanh (đặt SAU màu xen kẽ để thắng) */
+      .tracking-table-wrap .bcgc-table tr.row-focus td { background: #d9e8ff; }
+      body.dark-mode .tracking-table-wrap .bcgc-table tr:nth-child(odd) td { background: #222834; }
+      body.dark-mode .tracking-table-wrap .bcgc-table tr:nth-child(even) td { background: #1c1f26; }
+      body.dark-mode .tracking-table-wrap .bcgc-table tr.row-focus td { background: #26364d; }
+      /* Thông báo trống nằm DƯỚI header, không kéo giãn header */
+      .bcgc-empty { padding: 70px 16px; text-align: center; color: #999; font-size: 14px; }
+
+            /* ===== KH BUS: slide kiểu PowerPoint ===== */
+      .khbus-slide {
+        max-width: 1700px; margin: 0 auto; aspect-ratio: 16 / 9;
+        display: flex; flex-direction: column; font-family: Arial, sans-serif;
+        border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06);
+      }
+      .khbus-slide-header {
+        position: relative; text-align: center; padding: 18px 28px 16px 28px;
+        background: linear-gradient(135deg, #003DA5 0%, #1a73e8 100%); color: #fff;
+        border-radius: 8px 8px 0 0;
+      }
+      .khbus-slide-header::after {
+        content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
+        background: linear-gradient(90deg, #fbbc04, #ff8c00);
+      }
+      .khbus-slide-body { flex: 1; padding: 14px 20px 8px 20px; }
+      .khbus-slide-footer {
+        display: flex; justify-content: space-between; padding: 8px 24px; font-size: 11px;
+        color: #8a90a0; border-top: 1px solid rgba(128,128,128,0.25);
+      }
+      .khbus-header-table td { user-select: none; }
+      .khbus-header-table [contenteditable="true"] { user-select: text; cursor: text; outline: 2px solid #1a73e8 !important; border-radius: 2px; }
+      .khbus-drag-handle i { pointer-events: none; }
 
       /* ===== Modal thêm mục phân quyền / thêm người dùng ===== */
       .simple-modal-field { margin-bottom: 14px; }
@@ -5405,27 +5439,25 @@ function onVtGhQrScanSuccess_(decodedText) {
           });
       }
 
-            function khbusRenderSlideList_() {
+      function khbusRenderSlideList_() {
         const wrap = document.getElementById('khbusSlideList');
         const dark = khbusIsDark_();
         const cardBg = dark ? '#1c1f26' : '#fff';
-        const cardBorder = dark ? '#2c313c' : '#d5d9e0';
-        const activeBg = dark ? '#1a2c4d' : '#eaf2ff';
-        const labelColor = dark ? '#9aa0ab' : '#8a90a0';
-        const previewBg = dark ? '#23262d' : '#f4f6f9';
-        const titleColor = dark ? '#8fc1ff' : '#003DA5';
+        const border = dark ? '#3a3f4a' : '#d5d9e0';
+        const numColor = dark ? '#9aa0ab' : '#6b7280';
 
         wrap.innerHTML = khbusSlides_.map(function(s, i) {
           const active = i === khbusCurrentIndex_;
           const title = escapeHtml_((s.title || 'Chưa đặt tên').slice(0, 90));
-          return '<div onclick="khbusSelectSlide_(' + i + ')" style="cursor:pointer; border:2px solid ' + (active ? '#1a73e8' : cardBorder) +
-            '; border-radius:10px; background:' + (active ? activeBg : cardBg) + '; padding:8px; box-shadow:0 1px 4px rgba(0,0,0,0.1);">' +
-            '<div style="font-size:11px; font-weight:700; color:' + labelColor + '; margin-bottom:5px; letter-spacing:0.4px;">SLIDE ' + (i + 1) + '</div>' +
-            '<div style="min-height:72px; background:' + previewBg + '; border-radius:6px; display:flex; align-items:center; justify-content:center; padding:8px; text-align:center;">' +
-              '<div style="font-size:14px; font-weight:800; line-height:1.35; color:' + titleColor + '; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word;">' + title + '</div>' +
+          return '<div onclick="khbusSelectSlide_(' + i + ')" style="display:flex; gap:8px; align-items:flex-start; cursor:pointer;">' +
+            '<div style="width:16px; text-align:right; font-size:12px; font-weight:700; color:' + (active ? '#1a73e8' : numColor) + '; padding-top:4px;">' + (i + 1) + '</div>' +
+            '<div style="flex:1; aspect-ratio:16/9; display:flex; flex-direction:column; overflow:hidden; border-radius:4px; background:' + cardBg +
+              '; border:2px solid ' + (active ? '#1a73e8' : border) + '; box-shadow:' + (active ? '0 0 0 3px rgba(26,115,232,0.25)' : '0 1px 3px rgba(0,0,0,0.15)') + ';">' +
+              '<div style="background:linear-gradient(135deg,#003DA5,#1a73e8); color:#fff; font-size:8px; font-weight:800; line-height:1.3; text-align:center; padding:6px 5px; border-bottom:2px solid #fbbc04; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">' + title + '</div>' +
+              '<div style="flex:1; background-image:linear-gradient(' + (dark ? '#2c313c' : '#e3e6ea') + ' 1px, transparent 1px); background-size:100% 8px; opacity:0.9;"></div>' +
             '</div></div>';
         }).join('') +
-        '<button type="button" onclick="khbusAddSlide_()" style="border:2px dashed ' + (dark ? '#3a3f4a' : '#bbb') + '; background:none; border-radius:10px; padding:12px; color:' + (dark ? '#9aa0ab' : '#666') + '; cursor:pointer; font-size:13px; font-weight:700;">' +
+        '<button type="button" onclick="khbusAddSlide_()" style="margin-left:24px; border:2px dashed ' + (dark ? '#3a3f4a' : '#bbb') + '; background:none; border-radius:8px; padding:12px; color:' + (dark ? '#9aa0ab' : '#666') + '; cursor:pointer; font-size:13px; font-weight:700;">' +
           '<i class="fa-solid fa-plus"></i> Thêm slide</button>';
       }
 
@@ -5568,6 +5600,7 @@ function onVtGhQrScanSuccess_(decodedText) {
         khbusMoveRow_(khbusDragRowIdx_, rIdx);
       }
       function khbusRowDragEnd_(e) {
+        if (e && e.currentTarget) e.currentTarget.draggable = false;
         document.querySelectorAll('#khbusSlideCanvas tr.khbus-row-dragging, #khbusSlideCanvas tr.khbus-row-dragover')
           .forEach(function(tr) { tr.classList.remove('khbus-row-dragging', 'khbus-row-dragover'); });
         khbusDragRowIdx_ = null;
@@ -5639,14 +5672,39 @@ function onVtGhQrScanSuccess_(decodedText) {
           .catch(function() { /* im lặng, lượt sau tự thử lại */ });
       }
 
-      function khbusEditableCell_(value, path, extraStyle) {
+      // alwaysEdit = true: tiêu đề/phụ đề, bấm là gõ ngay như ô văn bản của PowerPoint.
+      // Các ô bảng mặc định KHÔNG sửa được cho tới khi double-click / Enter / gõ phím.
+      function khbusEditableCell_(value, path, extraStyle, alwaysEdit) {
         const safeVal = escapeHtml_(value || '').replace(/\n/g, '<br>');
-        return '<div contenteditable="true" spellcheck="false" data-path="' + path + '" onblur="khbusUpdateField_(this.dataset.path, this.innerText)" ' +
-          'style="min-height:20px; outline:none; padding:2px; font-family:Arial, sans-serif; white-space:pre-wrap; word-break:break-word; text-align:center;' + (extraStyle || '') + '">' + safeVal + '</div>';
+        return '<div contenteditable="' + (alwaysEdit ? 'true' : 'false') + '"' + (alwaysEdit ? ' data-always="1"' : '') +
+          ' spellcheck="false" data-path="' + path + '" onblur="khbusCellBlur_(this)" ' +
+          'style="display:block; min-height:20px; outline:none; padding:2px; font-family:Arial, sans-serif; white-space:pre-wrap; word-break:break-word; text-align:center;' + (extraStyle || '') + '">' + safeVal + '</div>';
+      }
+
+      function khbusCellBlur_(el) {
+        khbusUpdateField_(el.dataset.path, el.innerText);
+        if (!el.dataset.always) el.setAttribute('contenteditable', 'false');
+        const sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
+      }
+
+      function khbusBeginEdit_(el, replaceText) {
+        if (!el) return;
+        el.setAttribute('contenteditable', 'true');
+        if (replaceText !== null && replaceText !== undefined) el.innerText = replaceText;
+        el.focus();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
       }
 
       function khbusRenderCanvas_() {
-        khbusClearSelection_();
+        // Cùng slide và đang có vùng chọn -> giữ nguyên vùng chọn sau khi vẽ lại
+        const keepSel_ = (khbusSelSlide_ === khbusCurrentIndex_ && khbusSelRegions.length > 0);
+        if (!keepSel_) khbusClearSelection_();
         const s = khbusSlides_[khbusCurrentIndex_];
         const canvas = document.getElementById('khbusSlideCanvas');
         if (!s) { canvas.innerHTML = ''; return; }
@@ -5659,12 +5717,12 @@ function onVtGhQrScanSuccess_(decodedText) {
         const subtitleColor = dark ? '#8fc1ff' : '#003DA5';
         const xacNhanBg = dark ? '#3a3520' : '#fff9c4';
 
-        let html = '<div style="background:' + wrapBg + '; max-width:1700px; margin:0 auto; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,0.3); font-family:Arial, sans-serif;">';
+        let html = '<div class="khbus-slide" style="background:' + wrapBg + ';">';
 
-        html += '<div style="background:' + titleBoxBg + '; border:2px solid ' + titleBoxBorder + '; padding:10px 16px; margin-bottom:14px; text-align:center;">' +
-          khbusEditableCell_(s.title, 'title', 'font-size:20px; font-weight:800; color:' + titleColor + '; text-align:center;') +
-          khbusEditableCell_(s.subtitle, 'subtitle', 'font-size:16px; font-weight:700; color:' + subtitleColor + '; text-align:center;') +
-        '</div>';
+        html += '<div class="khbus-slide-header">' +
+          khbusEditableCell_(s.title, 'title', 'font-size:24px; font-weight:800; color:#fff; letter-spacing:0.3px;', true) +
+          khbusEditableCell_(s.subtitle, 'subtitle', 'font-size:14px; font-weight:600; color:#cfe0ff; margin-top:2px;', true) +
+        '</div><div class="khbus-slide-body">';
 
         html += '<table class="khbus-header-table" style="width:100%; font-size:12px; text-align:center;">';
         html += '<tr>' +
@@ -5723,12 +5781,12 @@ function onVtGhQrScanSuccess_(decodedText) {
 
         s.rows.forEach(function(row, rIdx) {
           let colIdx = 0;
-          html += '<tr draggable="true" data-rowidx="' + rIdx + '"' +
+          html += '<tr data-rowidx="' + rIdx + '"' +
             ' ondragstart="khbusRowDragStart_(event,' + rIdx + ')"' +
             ' ondragover="khbusRowDragOver_(event,' + rIdx + ')"' +
             ' ondrop="khbusRowDrop_(event,' + rIdx + ')"' +
             ' ondragend="khbusRowDragEnd_(event)">' +
-            '<td class="khbus-drag-handle" title="Kéo để đổi vị trí"><i class="fa-solid fa-grip-vertical"></i></td>';
+            '<td class="khbus-drag-handle" title="Kéo để đổi vị trí" onmousedown="this.parentNode.draggable=true" onmouseup="this.parentNode.draggable=false"><i class="fa-solid fa-grip-vertical"></i></td>';
           const c0 = colIdx++;
           html += '<td data-r="' + rIdx + '" data-c="' + c0 + '" style="' + khbusTdStyle_(rIdx, c0, KHBUS_BASE_TD_STYLE_) + '">' + khbusEditableCell_(row.loaiXe, 'rows.' + rIdx + '.loaiXe', khbusCellTextStyle_(rIdx, c0, false)) + '</td>';
           const c1 = colIdx++;
@@ -5749,8 +5807,11 @@ function onVtGhQrScanSuccess_(decodedText) {
           html += '</tr>';
         });
 
-        html += '</table></div>';
+        html += '</table></div>' +
+          '<div class="khbus-slide-footer"><span>Xưởng Gia Công Cơ Khí Chính Xác</span><span>' +
+          (khbusCurrentIndex_ + 1) + ' / ' + khbusSlides_.length + '</span></div></div>';
         canvas.innerHTML = html;
+        if (keepSel_) khbusPaintSelection_();
       }
 
             /* ================= CHỌN Ô KIỂU EXCEL CHO BẢNG KH BUS ================= */
@@ -5785,7 +5846,9 @@ function onVtGhQrScanSuccess_(decodedText) {
         khbusSelAnchorR = r; khbusSelAnchorC = c; khbusActiveR = r; khbusActiveC = c;
         khbusPaintSelection_();
       }
+      let khbusSelSlide_ = -1; // slide mà vùng chọn hiện tại thuộc về
       function khbusPaintSelection_() {
+        khbusSelSlide_ = khbusCurrentIndex_;
         document.querySelectorAll('#khbusSlideCanvas td.cell-selected, #khbusSlideCanvas td.cell-active')
           .forEach(function(td) { td.classList.remove('cell-selected', 'cell-active'); });
         document.querySelectorAll('#khbusSlideCanvas td[data-r]').forEach(function(td) {
@@ -5972,13 +6035,18 @@ function onVtGhQrScanSuccess_(decodedText) {
       }
 
       document.getElementById('khbusSlideCanvas').addEventListener('mousedown', function(e) {
+        // Đang gõ trong 1 ô (hoặc tiêu đề) -> để trình duyệt tự đặt con trỏ
+        if (e.target.closest('[contenteditable="true"]')) return;
         const td = e.target.closest('td[data-r]');
         if (!td) return;
+        // Đang sửa ô khác -> thoát chế độ sửa (lưu) trước khi chọn ô mới
+        const ae = document.activeElement;
+        if (ae && ae.getAttribute && ae.getAttribute('contenteditable') === 'true') ae.blur();
         const r = Number(td.getAttribute('data-r')), c = Number(td.getAttribute('data-c'));
         if (e.shiftKey) { khbusExtendSelection_(r, c); khbusIsSelecting = false; }
         else if (e.ctrlKey || e.metaKey) { khbusToggleCellRegion_(r, c); khbusIsSelecting = false; }
         else { khbusIsSelecting = true; khbusSelectSingle_(r, c); }
-        // Không preventDefault để vẫn bấm vào ô sửa được nội dung (contenteditable)
+        e.preventDefault(); // chặn bôi đen chữ -> click = chọn ô, double-click = sửa
       });
       document.getElementById('khbusSlideCanvas').addEventListener('mouseover', function(e) {
         if (!khbusIsSelecting) return;
@@ -5987,83 +6055,267 @@ function onVtGhQrScanSuccess_(decodedText) {
         khbusExtendSelection_(Number(td.getAttribute('data-r')), Number(td.getAttribute('data-c')));
       });
       document.addEventListener('mouseup', function() { khbusIsSelecting = false; });
-      function khbusCellMaxCR_() {
+            /* ================= KH BUS: sửa ô, copy/dán kèm định dạng, phím tắt ================= */
+      let khbusClip_ = null; // { matrix: [[{v, f}|null]], tsv } - clipboard nội bộ (có định dạng)
+
+      function khbusBounds_() {
         const s = khbusSlides_[khbusCurrentIndex_];
         return { maxR: s ? s.rows.length - 1 : 0, maxC: 1 + KHBUS_GROUPS_.length * 3 };
       }
+      function khbusSelRect_() {
+        let r1 = Infinity, r2 = -Infinity, c1 = Infinity, c2 = -Infinity;
+        khbusSelRegions.forEach(function(g) {
+          r1 = Math.min(r1, g.r1); r2 = Math.max(r2, g.r2);
+          c1 = Math.min(c1, g.c1); c2 = Math.max(c2, g.c2);
+        });
+        return { r1: r1, r2: r2, c1: c1, c2: c2 };
+      }
 
-      function khbusMoveActiveCell_(r, c) {
-        const bounds = khbusCellMaxCR_();
-        r = Math.max(0, Math.min(r, bounds.maxR));
-        c = Math.max(0, Math.min(c, bounds.maxC));
-        khbusSelectSingle_(r, c);
-        const cell = document.querySelector('#khbusSlideCanvas td[data-r="' + r + '"][data-c="' + c + '"] [contenteditable]');
-        if (cell) {
-          cell.focus();
-          const range = document.createRange();
-          range.selectNodeContents(cell);
-          range.collapse(false); // đặt con trỏ ở cuối nội dung ô mới
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(range);
+      // Cột c -> ô dữ liệu thật: 0 = Loại xe, 1 = SL ĐH, rồi mỗi nhóm 3 cột (KH nhận / LSX / Xác nhận)
+      function khbusCellRef_(s, r, c) {
+        const row = s.rows[r];
+        if (!row) return null;
+        if (c === 0) return { o: row, k: 'loaiXe' };
+        if (c === 1) return { o: row, k: 'slDatHang' };
+        const g = KHBUS_GROUPS_[Math.floor((c - 2) / 3)];
+        if (!g) return null;
+        if (!row[g]) row[g] = { khNhan: '', lsx: '', xacNhan: '' };
+        return { o: row[g], k: ['khNhan', 'lsx', 'xacNhan'][(c - 2) % 3] };
+      }
+      function khbusGetCellValue_(s, r, c) {
+        const ref = khbusCellRef_(s, r, c);
+        return ref ? (ref.o[ref.k] || '') : '';
+      }
+      function khbusSetCellValue_(s, r, c, v) {
+        const ref = khbusCellRef_(s, r, c);
+        if (ref) ref.o[ref.k] = v;
+      }
+      function khbusGetFmt_(s, r, c) {
+        const key = r + '_' + c;
+        return {
+          bg: (s.cellColors && s.cellColors[key]) || '',
+          color: (s.cellTextColors && s.cellTextColors[key]) || '',
+          size: (s.cellFontSizes && s.cellFontSizes[key]) || '',
+          bold: !!(s.cellBold && s.cellBold[key])
+        };
+      }
+      function khbusApplyFmt_(s, r, c, f) {
+        const key = r + '_' + c;
+        s.cellColors = s.cellColors || {}; s.cellTextColors = s.cellTextColors || {};
+        s.cellFontSizes = s.cellFontSizes || {}; s.cellBold = s.cellBold || {};
+        function setOrDel(map, val) { if (val) map[key] = val; else delete map[key]; }
+        setOrDel(s.cellColors, f.bg); setOrDel(s.cellTextColors, f.color);
+        setOrDel(s.cellFontSizes, f.size); setOrDel(s.cellBold, f.bold);
+      }
+
+      function khbusTsvEscape_(v) {
+        v = String(v == null ? '' : v);
+        return /[\t\n"]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+      }
+      function khbusParseTsv_(text) {
+        const rows = []; let row = [], cur = '', inQ = false;
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i];
+          if (inQ) {
+            if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+            else cur += ch;
+          } else if (ch === '"' && cur === '') inQ = true;
+          else if (ch === '\t') { row.push(cur); cur = ''; }
+          else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+          else cur += ch;
+        }
+        row.push(cur); rows.push(row);
+        return rows;
+      }
+
+      function khbusSelectedCount_() {
+        let n = 0;
+        khbusSelRegions.forEach(function(g) { n += (g.r2 - g.r1 + 1) * (g.c2 - g.c1 + 1); });
+        return n;
+      }
+
+      function khbusCopySel_(isCut) {
+        const s = khbusSlides_[khbusCurrentIndex_];
+        if (!s || khbusSelRegions.length === 0) return;
+        const b = khbusSelRect_();
+        const matrix = [], lines = [];
+        for (let r = b.r1; r <= b.r2; r++) {
+          const row = [], texts = [];
+          for (let c = b.c1; c <= b.c2; c++) {
+            if (khbusIsCellSelected_(r, c)) {
+              const v = khbusGetCellValue_(s, r, c);
+              row.push({ v: v, f: khbusGetFmt_(s, r, c) });
+              texts.push(khbusTsvEscape_(v));
+            } else { row.push(null); texts.push(''); }
+          }
+          matrix.push(row); lines.push(texts.join('\t'));
+        }
+        const tsv = lines.join('\n');
+        khbusClip_ = { matrix: matrix, tsv: tsv };
+        writeToRealClipboard_(tsv);
+
+        if (isCut) {
+          khbusForEachSelectedCell_(function(r, c) { khbusSetCellValue_(s, r, c, ''); });
+          khbusRenderCanvas_();
+          khbusScheduleSave_();
+          showToast('Đã cắt ' + khbusSelectedCount_() + ' ô.', 'success');
+        } else {
+          showToast('Đã copy ' + khbusSelectedCount_() + ' ô (kèm định dạng).', 'success');
         }
       }
 
-      function khbusCaretAtStart_(el, range) {
-        const t = range.cloneRange();
-        t.selectNodeContents(el);
-        t.setEnd(range.startContainer, range.startOffset);
-        return t.toString().length === 0;
+      function khbusPasteText_(text) {
+        const s = khbusSlides_[khbusCurrentIndex_];
+        if (!s || khbusSelRegions.length === 0) return;
+        text = String(text || '').replace(/\r/g, '');
+        const normalized = text.replace(/\n$/, '');
+
+        let matrix;
+        if (khbusClip_ && khbusClip_.tsv === normalized) {
+          matrix = khbusClip_.matrix; // copy từ chính KH BUS -> dán luôn định dạng
+        } else {
+          matrix = khbusParseTsv_(normalized).map(function(row) {
+            return row.map(function(v) { return { v: v, f: null }; }); // từ nơi khác -> chỉ dán chữ
+          });
+        }
+        if (!matrix.length) return;
+
+        const b = khbusSelRect_();
+        const bounds = khbusBounds_();
+        let endR = b.r1, endC = b.c1;
+
+        // Copy 1 ô rồi chọn nhiều ô -> điền cho TẤT CẢ ô đang chọn
+        if (matrix.length === 1 && matrix[0].length === 1 && khbusSelectedCount_() > 1) {
+          const item = matrix[0][0];
+          khbusForEachSelectedCell_(function(r, c) {
+            khbusSetCellValue_(s, r, c, item.v);
+            if (item.f) khbusApplyFmt_(s, r, c, item.f);
+          });
+          endR = b.r2; endC = b.c2;
+        } else {
+          matrix.forEach(function(row, i) {
+            row.forEach(function(item, j) {
+              const r = b.r1 + i, c = b.c1 + j;
+              if (!item || r > bounds.maxR || c > bounds.maxC) return;
+              khbusSetCellValue_(s, r, c, item.v);
+              if (item.f) khbusApplyFmt_(s, r, c, item.f);
+              endR = Math.max(endR, r); endC = Math.max(endC, c);
+            });
+          });
+          // Chọn đúng vùng vừa dán
+          khbusSelectSingle_(b.r1, b.c1);
+          khbusExtendSelection_(endR, endC);
+        }
+
+        khbusRenderCanvas_();   // vẽ lại nhưng vẫn giữ vùng chọn
+        khbusScheduleSave_();
+        showToast('Đã dán.', 'success');
       }
-      function khbusCaretAtEnd_(el, range) {
-        const t = range.cloneRange();
-        t.selectNodeContents(el);
-        t.setStart(range.endContainer, range.endOffset);
-        return t.toString().length === 0;
+
+      function khbusMoveActiveCell_(r, c) {
+        const bd = khbusBounds_();
+        r = Math.max(0, Math.min(r, bd.maxR));
+        c = Math.max(0, Math.min(c, bd.maxC));
+        khbusSelectSingle_(r, c);
+        const td = document.querySelector('#khbusSlideCanvas td[data-r="' + r + '"][data-c="' + c + '"]');
+        if (td) td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       }
+      function khbusActiveEditable_() {
+        const td = document.querySelector('#khbusSlideCanvas td[data-r="' + khbusActiveR + '"][data-c="' + khbusActiveC + '"]');
+        return td ? td.querySelector('[data-path]') : null;
+      }
+
+      // Double-click vào ô -> vào chế độ sửa
+      document.getElementById('khbusSlideCanvas').addEventListener('dblclick', function(e) {
+        const td = e.target.closest('td[data-r]');
+        const el = td ? td.querySelector('[data-path]') : e.target.closest('[data-path]');
+        if (el && el.getAttribute('contenteditable') !== 'true') khbusBeginEdit_(el);
+      });
+
+      // Dán (Ctrl+V)
+      document.addEventListener('paste', function(e) {
+        const khbusTab = document.getElementById('tab-khbus');
+        if (!khbusTab || !khbusTab.classList.contains('active')) return;
+        const t = e.target;
+        const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+        if (t.getAttribute && t.getAttribute('contenteditable') === 'true') {
+          e.preventDefault();                       // đang gõ trong ô -> chỉ dán chữ thuần
+          document.execCommand('insertText', false, text);
+          return;
+        }
+        if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return;
+        if (khbusActiveR < 0) return;
+        e.preventDefault();
+        khbusPasteText_(text);
+      });
 
       document.addEventListener('keydown', function(e) {
         const khbusTab = document.getElementById('tab-khbus');
         if (!khbusTab || !khbusTab.classList.contains('active')) return;
 
-        const isEditingCell = e.target.getAttribute && e.target.getAttribute('contenteditable') === 'true';
+        const editing = e.target.getAttribute && e.target.getAttribute('contenteditable') === 'true';
 
-        if (isEditingCell) {
-          const arrowKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
-          if (arrowKeys.indexOf(e.key) === -1) return; // để trình duyệt tự lo copy/paste/gõ chữ
-
-          const sel = window.getSelection();
-          if (!sel || sel.rangeCount === 0) return;
-          const range = sel.getRangeAt(0);
-          if (!range.collapsed) return; // đang bôi đen chữ trong ô -> để trình duyệt tự xử lý
-
-          const td = e.target.closest('td[data-r]');
-          if (!td) return;
-          const r = Number(td.getAttribute('data-r')), c = Number(td.getAttribute('data-c'));
-          const atStart = khbusCaretAtStart_(e.target, range);
-          const atEnd = khbusCaretAtEnd_(e.target, range);
-
-          let targetR = r, targetC = c, shouldMove = false;
-          if (e.key === 'ArrowLeft' && atStart) { targetC = c - 1; shouldMove = true; }
-          else if (e.key === 'ArrowRight' && atEnd) { targetC = c + 1; shouldMove = true; }
-          else if (e.key === 'ArrowUp' && atStart) { targetR = r - 1; shouldMove = true; }
-          else if (e.key === 'ArrowDown' && atEnd) { targetR = r + 1; shouldMove = true; }
-
-          if (!shouldMove) return; // con trỏ chưa ở đầu/cuối ô -> để trình duyệt di chuyển con trỏ bình thường
-
-          e.preventDefault();
-          e.target.blur(); // trigger lưu qua onblur đã gắn sẵn (khbusUpdateField_)
-          khbusMoveActiveCell_(targetR, targetC);
-          return;
+        /* ---- Đang gõ trong ô ---- */
+        if (editing) {
+          const always = !!e.target.getAttribute('data-always'); // tiêu đề / phụ đề
+          if (e.key === 'Escape') { e.preventDefault(); e.target.blur(); return; }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (e.shiftKey || e.altKey) { document.execCommand('insertLineBreak'); return; }
+            const r = khbusActiveR, c = khbusActiveC;
+            e.target.blur();
+            if (!always && r >= 0) khbusMoveActiveCell_(r + 1, c);
+            return;
+          }
+          if (e.key === 'Tab' && !always) {
+            e.preventDefault();
+            const r = khbusActiveR, c = khbusActiveC;
+            e.target.blur();
+            khbusMoveActiveCell_(r, c + (e.shiftKey ? -1 : 1));
+          }
+          return; // phím khác: gõ chữ bình thường
         }
 
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { khbusCopySelection_(); }
-        else if (e.key === 'Escape') { khbusClearSelection_(); }
-        else if (khbusActiveR < 0) return;
-        else if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); khbusMoveActiveCell_(khbusActiveR + 1, khbusActiveC); }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); khbusMoveActiveCell_(khbusActiveR - 1, khbusActiveC); }
-        else if (e.key === 'ArrowLeft') { e.preventDefault(); khbusMoveActiveCell_(khbusActiveR, khbusActiveC - 1); }
-        else if (e.key === 'ArrowRight' || e.key === 'Tab') { e.preventDefault(); khbusMoveActiveCell_(khbusActiveR, khbusActiveC + 1); }
+        /* ---- Đang chọn ô (chưa sửa) ---- */
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'BUTTON') return;
+        if (khbusActiveR < 0) return;
+
+        const ctrl = e.ctrlKey || e.metaKey;
+        const key = e.key;
+        const s = khbusSlides_[khbusCurrentIndex_];
+        const bd = khbusBounds_();
+
+        if (ctrl && key.toLowerCase() === 'c') { e.preventDefault(); khbusCopySel_(false); }
+        else if (ctrl && key.toLowerCase() === 'x') { e.preventDefault(); khbusCopySel_(true); }
+        else if (ctrl && key.toLowerCase() === 'v') { /* xử lý ở sự kiện 'paste' */ }
+        else if (ctrl && key.toLowerCase() === 'a') {
+          e.preventDefault(); khbusSelectSingle_(0, 0); khbusExtendSelection_(bd.maxR, bd.maxC);
+        }
+        else if (key === 'Escape') { khbusClearSelection_(); }
+        else if (key === 'Delete' || key === 'Backspace') {
+          e.preventDefault();
+          khbusForEachSelectedCell_(function(r, c) { khbusSetCellValue_(s, r, c, ''); });
+          khbusRenderCanvas_(); khbusScheduleSave_();
+        }
+        else if (key === 'ArrowDown' || key === 'ArrowUp' || key === 'ArrowLeft' || key === 'ArrowRight') {
+          e.preventDefault();
+          const dr = key === 'ArrowDown' ? 1 : (key === 'ArrowUp' ? -1 : 0);
+          const dc = key === 'ArrowRight' ? 1 : (key === 'ArrowLeft' ? -1 : 0);
+          if (e.shiftKey) {
+            khbusExtendSelection_(
+              Math.max(0, Math.min(khbusActiveR + dr, bd.maxR)),
+              Math.max(0, Math.min(khbusActiveC + dc, bd.maxC)));
+          } else {
+            khbusMoveActiveCell_(khbusActiveR + dr, khbusActiveC + dc);
+          }
+        }
+        else if (key === 'Tab') { e.preventDefault(); khbusMoveActiveCell_(khbusActiveR, khbusActiveC + (e.shiftKey ? -1 : 1)); }
+        else if (key === 'Enter' || key === 'F2') { e.preventDefault(); khbusBeginEdit_(khbusActiveEditable_()); }
+        else if (!ctrl && !e.altKey && key.length === 1) {
+          // Gõ thẳng ký tự -> vào chế độ sửa, thay nội dung ô (giống Excel)
+          e.preventDefault();
+          khbusBeginEdit_(khbusActiveEditable_(), key);
+        }
       });
 
             /* ================= BÁO CÁO GIA CÔNG (Tiện / Phay / Nguội) ================= */
@@ -6248,9 +6500,10 @@ function onVtGhQrScanSuccess_(decodedText) {
         return html;
       }
 
-      function renderBaoCaoGcTable_(loai) {
+            function renderBaoCaoGcTable_(loai) {
         const wrap = document.getElementById('bcgcTableWrap-' + loai);
         if (!wrap) return;
+        bcgcResetSel_(loai); // bảng sắp được vẽ lại -> bỏ vùng chọn cũ
         const cols = bcgcVisibleColumns_(loai);
         const rows = bcgcApplyFilters_(loai, baoCaoGcState_[loai].rows);
 
@@ -6261,25 +6514,22 @@ function onVtGhQrScanSuccess_(decodedText) {
             : '';
         }
 
-        // Trạng thái trống: vẫn trải rộng toàn khung để thông báo ở giữa màn hình.
-        if (!baoCaoGcState_[loai].loaded) {
-          wrap.innerHTML = '<table class="bcgc-table" style="width:100%; height:100%;">' + bcgcBuildHeaderHtml_(loai) +
-            '<tr><td colspan="' + cols.length + '" class="empty-state-cell" style="height:65vh;">Nhập LSX và bấm Tìm để xem dữ liệu.</td></tr></table>';
-          return;
-        }
-        if (rows.length === 0) {
-          wrap.innerHTML = '<table class="bcgc-table" style="width:100%; height:100%;">' + bcgcBuildHeaderHtml_(loai) +
-            '<tr><td colspan="' + cols.length + '" class="empty-state-cell" style="height:65vh;">Không có dữ liệu phù hợp.</td></tr></table>';
+        // Chưa tìm / không có kết quả: header giữ chiều cao bình thường, thông báo nằm bên dưới
+        if (!baoCaoGcState_[loai].loaded || rows.length === 0) {
+          const msg = !baoCaoGcState_[loai].loaded
+            ? 'Nhập LSX và bấm Tìm để xem dữ liệu.'
+            : 'Không có dữ liệu phù hợp.';
+          wrap.innerHTML = '<table class="bcgc-table">' + bcgcBuildHeaderHtml_(loai) + '</table>' +
+            '<div class="bcgc-empty">' + msg + '</div>';
           return;
         }
 
-        // Có dữ liệu: bảng tự co theo nội dung (width:auto) -> không bị kéo giãn rộng.
         let html = '<table class="bcgc-table">' + bcgcBuildHeaderHtml_(loai);
-        rows.forEach(function(r) {
+        rows.forEach(function(r, rIdx) {
           html += '<tr>';
-          cols.forEach(function(c) {
+          cols.forEach(function(c, cIdx) {
             const v = r[c.key];
-            html += '<td' + (c.bold ? ' class="bcgc-bold"' : '') + '>' +
+            html += '<td' + (c.bold ? ' class="bcgc-bold"' : '') + ' data-r="' + rIdx + '" data-c="' + cIdx + '">' +
               (v === null || v === undefined || v === '' ? '' : escapeHtml_(String(v))) + '</td>';
           });
           html += '</tr>';
@@ -6287,6 +6537,133 @@ function onVtGhQrScanSuccess_(decodedText) {
         html += '</table>';
         wrap.innerHTML = html;
       }
+
+      /* ===== Chọn ô kiểu Excel cho bảng Báo cáo GC: click / kéo / Shift / Ctrl / Ctrl+C ===== */
+      const bcgcSel_ = {};
+      BAOCAOGC_TYPES_.forEach(function(t) {
+        bcgcSel_[t] = { regions: [], ar: -1, ac: -1, r: -1, c: -1, dragging: false };
+      });
+
+      function bcgcResetSel_(loai) {
+        const s = bcgcSel_[loai];
+        s.regions = []; s.ar = s.ac = s.r = s.c = -1; s.dragging = false;
+      }
+      function bcgcInSel_(s, r, c) {
+        return s.regions.some(function(g) { return r >= g.r1 && r <= g.r2 && c >= g.c1 && c <= g.c2; });
+      }
+      function bcgcPaint_(loai) {
+        const s = bcgcSel_[loai];
+        const wrap = document.getElementById('bcgcTableWrap-' + loai);
+        wrap.querySelectorAll('td.cell-selected, td.cell-active').forEach(function(td) { td.classList.remove('cell-selected', 'cell-active'); });
+        wrap.querySelectorAll('tr.row-focus').forEach(function(tr) { tr.classList.remove('row-focus'); });
+        if (s.regions.length === 0) return;
+        wrap.querySelectorAll('td[data-r]').forEach(function(td) {
+          const r = Number(td.getAttribute('data-r')), c = Number(td.getAttribute('data-c'));
+          if (bcgcInSel_(s, r, c)) {
+            td.classList.add('cell-selected');
+            td.parentNode.classList.add('row-focus');
+          }
+        });
+        const act = wrap.querySelector('td[data-r="' + s.r + '"][data-c="' + s.c + '"]');
+        if (act) { act.classList.add('cell-active'); act.parentNode.classList.add('row-focus'); }
+      }
+      function bcgcSelSingle_(loai, r, c) {
+        const s = bcgcSel_[loai];
+        s.regions = [{ r1: r, r2: r, c1: c, c2: c }];
+        s.ar = r; s.ac = c; s.r = r; s.c = c;
+        bcgcPaint_(loai);
+      }
+      function bcgcSelExtend_(loai, r, c) {
+        const s = bcgcSel_[loai];
+        if (s.ar < 0) { bcgcSelSingle_(loai, r, c); return; }
+        const rect = { r1: Math.min(s.ar, r), r2: Math.max(s.ar, r), c1: Math.min(s.ac, c), c2: Math.max(s.ac, c) };
+        if (s.regions.length === 0) s.regions.push(rect); else s.regions[s.regions.length - 1] = rect;
+        s.r = r; s.c = c;
+        bcgcPaint_(loai);
+      }
+      function bcgcSelToggle_(loai, r, c) {
+        const s = bcgcSel_[loai];
+        const idx = s.regions.findIndex(function(g) { return g.r1 === r && g.r2 === r && g.c1 === c && g.c2 === c; });
+        if (idx !== -1) s.regions.splice(idx, 1); else s.regions.push({ r1: r, r2: r, c1: c, c2: c });
+        s.ar = r; s.ac = c; s.r = r; s.c = c;
+        bcgcPaint_(loai);
+      }
+      function bcgcCopy_(loai) {
+        const s = bcgcSel_[loai];
+        if (s.regions.length === 0) return;
+        let r1 = Infinity, r2 = -Infinity, c1 = Infinity, c2 = -Infinity;
+        s.regions.forEach(function(g) { r1 = Math.min(r1, g.r1); r2 = Math.max(r2, g.r2); c1 = Math.min(c1, g.c1); c2 = Math.max(c2, g.c2); });
+        const wrap = document.getElementById('bcgcTableWrap-' + loai);
+        const lines = [];
+        for (let r = r1; r <= r2; r++) {
+          const vals = [];
+          for (let c = c1; c <= c2; c++) {
+            const td = wrap.querySelector('td[data-r="' + r + '"][data-c="' + c + '"]');
+            vals.push(bcgcInSel_(s, r, c) && td ? td.innerText.trim() : '');
+          }
+          lines.push(vals.join('\t'));
+        }
+        writeToRealClipboard_(lines.join('\n'));
+        showToast('Đã copy ' + ((r2 - r1 + 1) * (c2 - c1 + 1)) + ' ô.', 'success');
+      }
+      function bcgcActiveType_() {
+        for (let i = 0; i < BAOCAOGC_TYPES_.length; i++) {
+          const pane = document.getElementById('bcgcSubTab-' + BAOCAOGC_TYPES_[i]);
+          if (pane && pane.style.display !== 'none') return BAOCAOGC_TYPES_[i];
+        }
+        return null;
+      }
+      function bcgcMoveActive_(loai, r, c) {
+        const wrap = document.getElementById('bcgcTableWrap-' + loai);
+        let maxR = -1, maxC = -1;
+        wrap.querySelectorAll('td[data-r]').forEach(function(td) {
+          maxR = Math.max(maxR, Number(td.getAttribute('data-r')));
+          maxC = Math.max(maxC, Number(td.getAttribute('data-c')));
+        });
+        if (maxR < 0) return;
+        r = Math.max(0, Math.min(r, maxR)); c = Math.max(0, Math.min(c, maxC));
+        bcgcSelSingle_(loai, r, c);
+        const td = wrap.querySelector('td[data-r="' + r + '"][data-c="' + c + '"]');
+        if (td) td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+
+      BAOCAOGC_TYPES_.forEach(function(loai) {
+        const wrap = document.getElementById('bcgcTableWrap-' + loai);
+        wrap.addEventListener('mousedown', function(e) {
+          const td = e.target.closest('td[data-r]');
+          if (!td) return;
+          if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+          const r = Number(td.getAttribute('data-r')), c = Number(td.getAttribute('data-c'));
+          const s = bcgcSel_[loai];
+          if (e.shiftKey) { bcgcSelExtend_(loai, r, c); s.dragging = false; }
+          else if (e.ctrlKey || e.metaKey) { bcgcSelToggle_(loai, r, c); s.dragging = false; }
+          else { s.dragging = true; bcgcSelSingle_(loai, r, c); }
+          e.preventDefault();
+        });
+        wrap.addEventListener('mouseover', function(e) {
+          if (!bcgcSel_[loai].dragging) return;
+          const td = e.target.closest('td[data-r]');
+          if (td) bcgcSelExtend_(loai, Number(td.getAttribute('data-r')), Number(td.getAttribute('data-c')));
+        });
+      });
+      document.addEventListener('mouseup', function() {
+        BAOCAOGC_TYPES_.forEach(function(t) { bcgcSel_[t].dragging = false; });
+      });
+      document.addEventListener('keydown', function(e) {
+        const tab = document.getElementById('tab-baocaogc');
+        if (!tab || !tab.classList.contains('active')) return;
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        const loai = bcgcActiveType_();
+        if (!loai) return;
+        const s = bcgcSel_[loai];
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { bcgcCopy_(loai); e.preventDefault(); }
+        else if (e.key === 'Escape') { bcgcResetSel_(loai); bcgcPaint_(loai); }
+        else if (s.r < 0) return;
+        else if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); bcgcMoveActive_(loai, s.r + 1, s.c); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); bcgcMoveActive_(loai, s.r - 1, s.c); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); bcgcMoveActive_(loai, s.r, s.c - 1); }
+        else if (e.key === 'ArrowRight' || e.key === 'Tab') { e.preventDefault(); bcgcMoveActive_(loai, s.r, s.c + 1); }
+      });
 
       /* ================= DASHBOARD TIẾN ĐỘ ĐƠN HÀNG (CHO QUẢN LÝ) ================= */
       const DASHBOARD_COLVIS_COLUMNS_ = [
