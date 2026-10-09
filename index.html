@@ -1638,7 +1638,7 @@
         </div>
 
         <div id="tab-khbus" class="tab-pane" style="flex-direction:row; overflow:hidden;">
-          <div id="khbusSlideList" style="width:170px; flex-shrink:0; background:#f4f6f9; border-right:1px solid #e3e6ea; overflow-y:auto; padding:12px 10px; display:flex; flex-direction:column; gap:10px;"></div>
+          <div id="khbusSlideList" style="width:220px; flex-shrink:0; background:#f4f6f9; border-right:1px solid #e3e6ea; overflow-y:auto; padding:12px 10px; display:flex; flex-direction:column; gap:10px;"></div>
           <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-bottom:1px solid #eee; gap:8px; flex-wrap:wrap;">
               <div style="font-size:13px; color:#888;">Bấm vào ô để chỉnh sửa - tự động lưu.</div>
@@ -1709,7 +1709,7 @@
               <div style="display:flex; gap:8px; align-items:center;">
                 <div id="bcgcStatus-phay" style="font-size:12px; color:#888; white-space:nowrap;"></div>
                 <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_phay')"><i class="fa-solid fa-table-columns"></i></button>
-                <button type="button" id="bcgcRefreshBtn-phay" class="icon-btn" title="Làm mới" onclick="loadBaoCaoGcData_('phay')"><i class="fa-solid fa-arrows-rotate"></i></button>
+                <button type="button" id="bcgcRefreshBtn-phay" class="icon-btn" title="Làm mới" onclick="bcgcApplySearch_('phay')"><i class="fa-solid fa-arrows-rotate"></i></button>
               </div>
             </div>
             <div id="bcgcTableWrap-phay" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
@@ -1729,7 +1729,7 @@
               <div style="display:flex; gap:8px; align-items:center;">
                 <div id="bcgcStatus-nguoi" style="font-size:12px; color:#888; white-space:nowrap;"></div>
                 <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_nguoi')"><i class="fa-solid fa-table-columns"></i></button>
-                <button type="button" id="bcgcRefreshBtn-nguoi" class="icon-btn" title="Làm mới" onclick="loadBaoCaoGcData_('nguoi')"><i class="fa-solid fa-arrows-rotate"></i></button>
+                <button type="button" id="bcgcRefreshBtn-nguoi" class="icon-btn" title="Làm mới" onclick="bcgcApplySearch_('nguoi')"><i class="fa-solid fa-arrows-rotate"></i></button>
               </div>
             </div>
             <div id="bcgcTableWrap-nguoi" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
@@ -5393,24 +5393,27 @@ function onVtGhQrScanSuccess_(decodedText) {
           });
       }
 
-      function khbusRenderSlideList_() {
+            function khbusRenderSlideList_() {
         const wrap = document.getElementById('khbusSlideList');
         const dark = khbusIsDark_();
         const cardBg = dark ? '#1c1f26' : '#fff';
-        const cardBorder = dark ? '#2c313c' : '#ddd';
-        const cardText = dark ? '#9aa0ab' : '#666';
-        const previewBg = dark ? '#23262d' : '#f8f9fa';
+        const cardBorder = dark ? '#2c313c' : '#d5d9e0';
+        const activeBg = dark ? '#1a2c4d' : '#eaf2ff';
+        const labelColor = dark ? '#9aa0ab' : '#8a90a0';
+        const previewBg = dark ? '#23262d' : '#f4f6f9';
         const titleColor = dark ? '#8fc1ff' : '#003DA5';
+
         wrap.innerHTML = khbusSlides_.map(function(s, i) {
           const active = i === khbusCurrentIndex_;
+          const title = escapeHtml_((s.title || 'Chưa đặt tên').slice(0, 90));
           return '<div onclick="khbusSelectSlide_(' + i + ')" style="cursor:pointer; border:2px solid ' + (active ? '#1a73e8' : cardBorder) +
-            '; border-radius:6px; background:' + cardBg + '; padding:6px; font-size:10px; color:' + cardText + '; box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
-            '<div style="font-weight:800; color:' + titleColor + '; margin-bottom:4px;">Slide ' + (i + 1) + '</div>' +
-            '<div style="height:70px; background:' + previewBg + '; border-radius:3px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:4px; text-align:center; line-height:1.2;">' +
-              escapeHtml_((s.title || '').slice(0, 40)) +
+            '; border-radius:10px; background:' + (active ? activeBg : cardBg) + '; padding:8px; box-shadow:0 1px 4px rgba(0,0,0,0.1);">' +
+            '<div style="font-size:11px; font-weight:700; color:' + labelColor + '; margin-bottom:5px; letter-spacing:0.4px;">SLIDE ' + (i + 1) + '</div>' +
+            '<div style="min-height:72px; background:' + previewBg + '; border-radius:6px; display:flex; align-items:center; justify-content:center; padding:8px; text-align:center;">' +
+              '<div style="font-size:14px; font-weight:800; line-height:1.35; color:' + titleColor + '; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word;">' + title + '</div>' +
             '</div></div>';
         }).join('') +
-        '<button type="button" onclick="khbusAddSlide_()" style="border:2px dashed ' + (dark ? '#3a3f4a' : '#bbb') + '; background:none; border-radius:6px; padding:10px; color:' + (dark ? '#9aa0ab' : '#888') + '; cursor:pointer; font-size:12px;">' +
+        '<button type="button" onclick="khbusAddSlide_()" style="border:2px dashed ' + (dark ? '#3a3f4a' : '#bbb') + '; background:none; border-radius:10px; padding:12px; color:' + (dark ? '#9aa0ab' : '#666') + '; cursor:pointer; font-size:13px; font-weight:700;">' +
           '<i class="fa-solid fa-plus"></i> Thêm slide</button>';
       }
 
@@ -6110,35 +6113,89 @@ function onVtGhQrScanSuccess_(decodedText) {
 
       // Tìm kiếm THEO YÊU CẦU (không tải sẵn toàn bộ sheet - sheet nguồn có thể tới hàng
       // chục nghìn dòng). Gọi trực tiếp Apps Script -> Google Sheet tương ứng của loại này.
+            const bcgcSearchCache_ = {};
+      const BCGC_CLIENT_CACHE_MS_ = 60000;
+      const bcgcSearchReqId_ = { tien: 0, phay: 0, nguoi: 0 };
+
+      // Gọi THẲNG Supabase (không qua Apps Script) - có phân trang vì server giới hạn số dòng/lần
+      async function bcgcFetchDirect_(loai, tokens) {
+        const table = 'bao_cao_gc_' + loai;
+        const filter = tokens.length === 1
+          ? 'lsx=ilike.*' + encodeURIComponent(tokens[0]) + '*'
+          : 'or=(' + tokens.map(function(t) { return 'lsx.ilike.*' + encodeURIComponent(t) + '*'; }).join(',') + ')';
+        const url = SUPABASE_URL_DIRECT_ + '/rest/v1/' + table + '?' + filter + '&select=*&order=thu_tu.asc';
+
+        let all = [], from = 0;
+        while (true) {
+          const res = await fetch(url, {
+            headers: Object.assign({ Range: from + '-' + (from + 999), 'Range-Unit': 'items', Prefer: 'count=exact' }, supabaseHeaders_())
+          });
+          if (res.status === 416) break;
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const rows = await res.json();
+          if (rows.length === 0) break;
+          all = all.concat(rows);
+          from += rows.length;
+          const m = (res.headers.get('Content-Range') || '').match(/\/(\d+)$/);
+          if (m && from >= Number(m[1])) break;
+        }
+        return all.map(function(r) {
+          const o = { sheetRow: r.thu_tu };
+          BAOCAOGC_COLUMNS_.forEach(function(c) { o[c.key] = (r[c.key] === null || r[c.key] === undefined) ? '' : r[c.key]; });
+          return o;
+        });
+      }
+
       function bcgcApplySearch_(loai) {
         const raw = document.getElementById('bcgcSearchInput-' + loai).value;
         const clearBtn = document.getElementById('bcgcSearchClear-' + loai);
         if (clearBtn) clearBtn.style.display = raw ? 'block' : 'none';
 
-        if (!raw || !raw.trim()) {
-          showToast('Vui lòng nhập LSX cần tìm.', 'error');
+        const tokens = raw.split(/[,;\s]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length >= 3; });
+        if (tokens.length === 0) {
+          showToast('Vui lòng nhập LSX (tối thiểu 3 ký tự, nhớ dấu "/").', 'error');
           return;
         }
 
         const statusEl = document.getElementById('bcgcStatus-' + loai);
         const btn = document.getElementById('bcgcRefreshBtn-' + loai);
+        const cacheKey = loai + '|' + tokens.join(',').toLowerCase();
+        const myId = ++bcgcSearchReqId_[loai];
+
+        function finish(rows) {
+          if (myId !== bcgcSearchReqId_[loai]) return; // đã có lượt tìm mới hơn
+          baoCaoGcState_[loai].rows = rows || [];
+          baoCaoGcState_[loai].loaded = true;
+          bcgcSearchCache_[cacheKey] = { ts: Date.now(), rows: rows || [] };
+          if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+          renderBaoCaoGcTable_(loai);
+        }
+        function fail(err) {
+          if (myId !== bcgcSearchReqId_[loai]) return;
+          if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+          if (statusEl) statusEl.textContent = 'Lỗi tìm kiếm.';
+          showToast('Lỗi tìm kiếm Báo cáo GC: ' + err.message, 'error');
+        }
+        function viaServer() {
+          google.script.run
+            .withSuccessHandler(finish)
+            .withFailureHandler(fail)
+            .searchBaoCaoGC(loai, tokens.join(','));
+        }
+
+        // Có sẵn trong bộ nhớ (vừa tìm xong) -> hiện ngay, không gọi mạng
+        const hit = bcgcSearchCache_[cacheKey];
+        if (hit && (Date.now() - hit.ts) < BCGC_CLIENT_CACHE_MS_) { finish(hit.rows); return; }
+
         if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
         if (statusEl) statusEl.textContent = 'Đang tìm...';
 
-        google.script.run
-          .withSuccessHandler(function(rows) {
-            baoCaoGcState_[loai].rows = rows || [];
-            baoCaoGcState_[loai].loaded = true;
-            if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
-            renderBaoCaoGcTable_(loai);
-            showToast('Tìm thấy ' + baoCaoGcState_[loai].rows.length + ' dòng.', 'success');
+        bcgcFetchDirect_(loai, tokens)
+          .then(function(rows) {
+            if (rows.length > 0) finish(rows);
+            else viaServer(); // 0 kết quả: hỏi lại server (phòng khi bảng chưa nạp xong). Khi đã nạp đủ có thể đổi thành finish(rows)
           })
-          .withFailureHandler(function(err) {
-            if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
-            if (statusEl) statusEl.textContent = 'Lỗi tìm kiếm.';
-            showToast('Lỗi tìm kiếm Báo cáo GC: ' + err.message, 'error');
-          })
-          .searchBaoCaoGC(loai, raw);
+          .catch(viaServer);
       }
 
       function bcgcClearSearch_(loai) {
@@ -9450,7 +9507,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       </div>
     </div>
 
-    <div id="genericColVisOverlay" class="colvis-overlay" style="display:none;">
+    <div id="genericColVisOverlay" class="colvis-overlay" style="display:none; z-index:480;">
       <div class="colvis-modal">
         <div class="colvis-header">
           <h3>Chọn cột hiển thị</h3>
