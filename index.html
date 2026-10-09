@@ -1207,6 +1207,18 @@
       .khbus-header-table th.khbus-thead-r1 { top: 0; z-index: 8; }
       .khbus-header-table th.khbus-thead-r2 { top: 34px; z-index: 7; }
 
+            /* ===== Bảng Báo cáo GC (Tiện/Phay/Nguội): gọn, vừa đủ thông tin ===== */
+      .tracking-table-wrap .bcgc-table { width: auto; min-width: 0; font-size: 12px; }
+      .tracking-table-wrap .bcgc-table th {
+        white-space: normal; line-height: 1.25; padding: 6px 6px;
+        vertical-align: middle; text-align: center;
+      }
+      .tracking-table-wrap .bcgc-table td { padding: 5px 6px; white-space: nowrap; }
+      /* Header được phép xuống dòng khi nhãn dài (VD "Time GC (phút)") */
+      .bcgc-th-label { max-width: 78px; margin: 0 auto; white-space: normal; word-break: break-word; }
+      .tracking-table-wrap .bcgc-table td.bcgc-bold { font-weight: 700; }
+      .tracking-table-wrap .bcgc-table th.bcgc-bold { font-weight: 800; }
+
       /* ===== Modal thêm mục phân quyền / thêm người dùng ===== */
       .simple-modal-field { margin-bottom: 14px; }
       .simple-modal-field label { font-size: 13px; font-weight: 600; color: #333; display: block; margin-bottom: 6px; }
@@ -6056,13 +6068,13 @@ function onVtGhQrScanSuccess_(decodedText) {
 
             /* ================= BÁO CÁO GIA CÔNG (Tiện / Phay / Nguội) ================= */
       const BAOCAOGC_COLUMNS_ = [
-        { key: 'kh_may', label: 'KH máy' },
-        { key: 'ngay_sx_thuc_te', label: 'Ngày SX Thực tế' },
-        { key: 'lsx', label: 'Lệnh sản xuất' },
+        { key: 'kh_may', label: 'Máy GC', bold: true },
+        { key: 'ngay_sx_thuc_te', label: 'Ngày GC' },
+        { key: 'lsx', label: 'LSX', bold: true },
         { key: 'san_pham', label: 'Sản phẩm' },
-        { key: 'stt_kanban', label: 'STT Kanban' },
+        { key: 'stt_kanban', label: 'STT' },
         { key: 'ma_so', label: 'Mã số' },
-        { key: 'ten_chi_tiet', label: 'Tên chi tiết' },
+        { key: 'ten_chi_tiet', label: 'Tên chi tiết', bold: true },
         { key: 'vat_lieu', label: 'Vật liệu' },
         { key: 'dai', label: 'Dài' },
         { key: 'rong', label: 'Rộng' },
@@ -6070,21 +6082,21 @@ function onVtGhQrScanSuccess_(decodedText) {
         { key: 'hinh', label: 'Hình' },
         { key: 'dn', label: 'Dn' },
         { key: 'dt', label: 'Dt' },
-        { key: 'sl_dh', label: 'SL/ĐH' },
+        { key: 'sl_dh', label: 'SL/ĐH', bold: true },
         { key: 'sl_gv', label: 'SL GV' },
         { key: 'kl', label: 'KL' },
         { key: 'cycle_time', label: 'Cycle time' },
         { key: 'so_phoi_lan_cat', label: 'Số phôi/lần cắt' },
-        { key: 'tg_gc_phut', label: 'Thời gian gia công (phút)' },
+        { key: 'tg_gc_phut', label: 'Time GC (phút)' },
         { key: 'tg_gc', label: 'Thời gian gia công' },
-        { key: 'bat_dau_du_kien', label: 'Bắt đầu dự kiến' },
-        { key: 'ket_thuc_du_kien', label: 'Kết thúc dự kiến' },
-        { key: 'tg_giao_viec', label: 'Thời gian giao việc' },
-        { key: 'bat_dau_thuc_te', label: 'Bắt đầu thực tế' },
-        { key: 'ket_thuc_thuc_te', label: 'Kết thúc thực tế' },
+        { key: 'bat_dau_du_kien', label: 'BĐ DK' },
+        { key: 'ket_thuc_du_kien', label: 'KT DK' },
+        { key: 'tg_giao_viec', label: 'Time GV' },
+        { key: 'bat_dau_thuc_te', label: 'BĐ TT' },
+        { key: 'ket_thuc_thuc_te', label: 'KT TT' },
         { key: 'ca_sx', label: 'Ca SX' },
-        { key: 'ns_gia_cong', label: 'NS gia công' },
-        { key: 'tong_sl_gc', label: 'Tổng SL GC' }
+        { key: 'ns_gia_cong', label: 'NS GC' },
+        { key: 'tong_sl_gc', label: 'SL GC', bold: true }
       ];
 
       const BAOCAOGC_TYPES_ = ['tien', 'phay', 'nguoi'];
@@ -6227,9 +6239,10 @@ function onVtGhQrScanSuccess_(decodedText) {
         let html = '<tr>';
         bcgcVisibleColumns_(loai).forEach(function(col) {
           const activeCls = filtersObj[col.key] ? ' active' : '';
-          html += '<th>' + col.label +
+          html += '<th' + (col.bold ? ' class="bcgc-bold"' : '') + '>' +
+            '<div class="bcgc-th-label">' + col.label +
             '<span class="filter-icon' + activeCls + '" onclick="openFilterPopup(\'' + col.key + '\', this, \'baocaogc_' + loai + '\')">&#9662;</span>' +
-            '</th>';
+            '</div></th>';
         });
         html += '</tr>';
         return html;
@@ -6248,25 +6261,26 @@ function onVtGhQrScanSuccess_(decodedText) {
             : '';
         }
 
-        // Luôn vẽ SẴN bảng (header) chiếm trọn khung nhìn - không để khoảng trắng - dù
-        // chưa tìm kiếm hay không có kết quả, giữ đúng cảm giác "app luôn sẵn sàng".
+        // Trạng thái trống: vẫn trải rộng toàn khung để thông báo ở giữa màn hình.
         if (!baoCaoGcState_[loai].loaded) {
-          wrap.innerHTML = '<table style="width:100%; height:100%;">' + bcgcBuildHeaderHtml_(loai) +
+          wrap.innerHTML = '<table class="bcgc-table" style="width:100%; height:100%;">' + bcgcBuildHeaderHtml_(loai) +
             '<tr><td colspan="' + cols.length + '" class="empty-state-cell" style="height:65vh;">Nhập LSX và bấm Tìm để xem dữ liệu.</td></tr></table>';
           return;
         }
         if (rows.length === 0) {
-          wrap.innerHTML = '<table style="width:100%; height:100%;">' + bcgcBuildHeaderHtml_(loai) +
+          wrap.innerHTML = '<table class="bcgc-table" style="width:100%; height:100%;">' + bcgcBuildHeaderHtml_(loai) +
             '<tr><td colspan="' + cols.length + '" class="empty-state-cell" style="height:65vh;">Không có dữ liệu phù hợp.</td></tr></table>';
           return;
         }
 
-        let html = '<table style="width:100%;">' + bcgcBuildHeaderHtml_(loai);
+        // Có dữ liệu: bảng tự co theo nội dung (width:auto) -> không bị kéo giãn rộng.
+        let html = '<table class="bcgc-table">' + bcgcBuildHeaderHtml_(loai);
         rows.forEach(function(r) {
           html += '<tr>';
           cols.forEach(function(c) {
             const v = r[c.key];
-            html += '<td>' + (v === null || v === undefined || v === '' ? '' : escapeHtml_(String(v))) + '</td>';
+            html += '<td' + (c.bold ? ' class="bcgc-bold"' : '') + '>' +
+              (v === null || v === undefined || v === '' ? '' : escapeHtml_(String(v))) + '</td>';
           });
           html += '</tr>';
         });
