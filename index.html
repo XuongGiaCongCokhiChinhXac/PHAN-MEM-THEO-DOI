@@ -576,9 +576,28 @@
     transition: width 0.2s ease; flex-shrink: 0; overflow: hidden;
   }
   .sidebar.collapsed { width: 56px; }
-  /* Không còn nút bấm thu/mở - tự mở rộng khi rê chuột vào, tự thu lại khi rê ra ngoài */
-  .sidebar.collapsed:hover { width: 190px; }
-  .sidebar.collapsed:hover .nav-label { display: inline; }
+  /* Sidebar luôn thu gọn: chỉ hiện icon, rê chuột thì hiện tooltip nhãn (xem initSidebarTooltip_) */
+  .sidebar .sidebar-nav-btn { justify-content: center !important; padding: 12px 0 !important; }
+  .sidebar .sidebar-nav-btn:hover { transform: none; box-shadow: none; }
+  .sidebar .sidebar-nav-btn.active { box-shadow: inset 3px 0 0 #fbbc04; }
+  .sidebar .sidebar-subtab-list { padding: 4px 6px 8px 6px; }
+  .sidebar .sidebar-subtab-list .sidebar-nav-btn { padding: 10px 0 !important; }
+  .sidebar .cat-btn-side:hover { transform: none; }
+
+  .sb-tooltip {
+    position: fixed; z-index: 700; pointer-events: none;
+    background: #1f2937; color: #fff; font-size: 12.5px; font-weight: 600; letter-spacing: 0.2px;
+    padding: 7px 12px; border-radius: 8px; white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+    opacity: 0; transform: translate(-6px, -50%);
+    transition: opacity 0.14s ease, transform 0.14s ease, top 0.1s ease;
+  }
+  .sb-tooltip.show { opacity: 1; transform: translate(0, -50%); }
+  .sb-tooltip::before {
+    content: ''; position: absolute; left: -5px; top: 50%; margin-top: -5px;
+    width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+    border-right: 5px solid #1f2937;
+  }
 
   /* ===== Thanh điều hướng dưới cùng - CHỈ dùng cho mobile, thay thế sidebar ===== */
   .mobile-bottom-nav { display: none; }
@@ -4191,6 +4210,45 @@ function tgGcStickyColClass_(arrIdx) {
       renderEmptyTable();
       applySavedDisplayPrefs_();
       initDashSearchBox_();
+
+            /* ================= TOOLTIP NHÃN CHO SIDEBAR (thay cho kiểu tự mở rộng) ================= */
+      (function initSidebarTooltip_() {
+        const sidebar = document.getElementById('mainSidebar');
+        if (!sidebar) return;
+
+        const tip = document.createElement('div');
+        tip.className = 'sb-tooltip';
+        document.body.appendChild(tip);
+        let currentBtn = null;
+
+        function labelOf_(btn) {
+          const lbl = btn.querySelector('span.nav-label');
+          if (lbl) return lbl.textContent.trim();
+          if (btn.classList.contains('cat-btn-side')) return 'Loại đơn: ' + btn.textContent.trim();
+          return '';
+        }
+        function show_(btn) {
+          if (window.innerWidth <= 768) return; // mobile dùng bottom nav, không cần tooltip
+          const text = labelOf_(btn);
+          if (!text) return;
+          currentBtn = btn;
+          tip.textContent = text;
+          const r = btn.getBoundingClientRect();
+          tip.style.left = (r.right + 12) + 'px';
+          tip.style.top = (r.top + r.height / 2) + 'px';
+          tip.classList.add('show');
+        }
+        function hide_() { currentBtn = null; tip.classList.remove('show'); }
+
+        sidebar.addEventListener('mouseover', function(e) {
+          const btn = e.target.closest('.sidebar-nav-btn, .cat-btn-side');
+          if (!btn || !sidebar.contains(btn)) { hide_(); return; }
+          if (btn !== currentBtn) show_(btn);
+        });
+        sidebar.addEventListener('mouseleave', hide_);
+        sidebar.addEventListener('click', hide_);
+        sidebar.addEventListener('scroll', hide_, true);
+      })();
 
         /* ================= SIDEBAR + TAB ================= */
       // Dữ liệu Nhận phôi / Giao hàng được tải 1 LẦN DUY NHẤT lúc mở app (xem loadInitialAppData_),
@@ -8572,7 +8630,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       }
 
       /* ================= CHỤP ẢNH BẢNG DASHBOARD ĐANG XEM ================= */
-      function captureDashboardTable_() {
+            function captureDashboardTable_() {
         if (typeof html2canvas === 'undefined') {
           showToast('Chưa tải được thư viện chụp ảnh, vui lòng thử lại sau vài giây.', 'error');
           return;
@@ -8582,22 +8640,41 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           return;
         }
 
-        showToast('Đang tạo ảnh, vui lòng đợi...', 'info');
-
+        // Chỉ chụp đúng các cột đang được bật trong nút "Chọn cột hiển thị" của Dashboard
+        const vis_ = function(k) { return isGenericColVisible_('dashboard', k); };
         const CHUYEN_LABELS = [
-          { key: 'ducNhom', label: 'Đúc nhôm' }, { key: 'cuaVong', label: 'Cửa vòng' },
-          { key: 'tien', label: 'Tiện' }, { key: 'phay', label: 'Phay' },
-          { key: 'nguoi', label: 'Nguội' }, { key: 'nhiet', label: 'Nhiệt' }
-        ];
+          { colKey: 'ducnhom', key: 'ducNhom', label: 'Đúc nhôm' },
+          { colKey: 'cuavong', key: 'cuaVong', label: 'Cửa vòng' },
+          { colKey: 'tien', key: 'tien', label: 'Tiện' },
+          { colKey: 'phay', key: 'phay', label: 'Phay' },
+          { colKey: 'nguoi', key: 'nguoi', label: 'Nguội' },
+          { colKey: 'nhiet', key: 'nhiet', label: 'Nhiệt' }
+        ].filter(function(c) { return vis_(c.colKey); });
+
+        const fixedKeys_ = ['dh', 'lsx', 'sanpham', 'uutien', 'khgh', 'tiendo', 'khogh', 'ngayht'];
+        if (CHUYEN_LABELS.length === 0 && !fixedKeys_.some(function(k) { return vis_(k); })) {
+          showToast('Chưa chọn cột nào để chụp.', 'error');
+          return;
+        }
+
+        showToast('Đang tạo ảnh, vui lòng đợi...', 'info');
 
         const th_ = function(label) {
           return '<th style="background:#003DA5;color:#fff;border:1px solid #ddd;padding:6px 8px;white-space:nowrap;">' + label + '</th>';
         };
+        const td_ = 'border:1px solid #ddd;padding:6px 8px;';
 
-        let html = '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;"><tr>' +
-          th_('ĐH') + th_('LSX') + th_('Sản phẩm') + th_('Ưu tiên') + th_('KHGH');
+        let html = '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;"><tr>';
+        if (vis_('dh')) html += th_('ĐH');
+        if (vis_('lsx')) html += th_('LSX');
+        if (vis_('sanpham')) html += th_('Sản phẩm');
+        if (vis_('uutien')) html += th_('Ưu tiên');
+        if (vis_('khgh')) html += th_('KHGH');
         CHUYEN_LABELS.forEach(function(c) { html += th_(c.label); });
-        html += th_('Tiến độ') + th_('% GH') + th_('Ngày HT') + '</tr>';
+        if (vis_('tiendo')) html += th_('Vật tư');
+        if (vis_('khogh')) html += th_('% GH');
+        if (vis_('ngayht')) html += th_('Ngày HT');
+        html += '</tr>';
 
         dashboardVisibleRows_.forEach(function(r) {
           const tag = priorityTags_[r.lsx] || '';
@@ -8613,17 +8690,17 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           const barColor = r.percent >= 100 ? '#34a853' : (r.percent >= 50 ? '#fbbc04' : '#ff8a3d');
 
           html += '<tr>';
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;text-align:center;">' + dhTagHtml + '</td>';
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;white-space:nowrap;text-align:center;font-weight:800;color:#003DA5;">' + escapeHtml_(r.lsx) + '</td>';
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;white-space:nowrap;text-align:center;">' + escapeHtml_(r.sanPham || '') + '</td>';
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;text-align:center;">' + tagHtml + '</td>';
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;white-space:nowrap;text-align:center;">' + formatDate(r.khgh) + '</td>';
+          if (vis_('dh')) html += '<td style="' + td_ + 'text-align:center;">' + dhTagHtml + '</td>';
+          if (vis_('lsx')) html += '<td style="' + td_ + 'white-space:nowrap;text-align:center;font-weight:800;color:#003DA5;">' + escapeHtml_(r.lsx) + '</td>';
+          if (vis_('sanpham')) html += '<td style="' + td_ + 'white-space:nowrap;text-align:center;">' + escapeHtml_(r.sanPham || '') + '</td>';
+          if (vis_('uutien')) html += '<td style="' + td_ + 'text-align:center;">' + tagHtml + '</td>';
+          if (vis_('khgh')) html += '<td style="' + td_ + 'white-space:nowrap;text-align:center;">' + formatDate(r.khgh) + '</td>';
 
           CHUYEN_LABELS.forEach(function(c) {
             const info = r.chuyen && r.chuyen[c.key];
             const tong = Number(info && info.tong) || 0;
             if (tong === 0) {
-              html += '<td style="border:1px solid #ddd;padding:6px 8px;text-align:center;color:#bbb;">-</td>';
+              html += '<td style="' + td_ + 'text-align:center;color:#bbb;">-</td>';
             } else {
               const gc = Number(info.gc) || 0;
               const conRaw = info.con;
@@ -8640,14 +8717,14 @@ window.addEventListener('online', tryFlushPriorityQueue_);
             }
           });
 
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;text-align:center;">' + percentBadge_(r.tinhTrang) + '</td>';
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;text-align:center;min-width:120px;">' +
+          if (vis_('tiendo')) html += '<td style="' + td_ + 'text-align:center;">' + percentBadge_(r.tinhTrang) + '</td>';
+          if (vis_('khogh')) html += '<td style="' + td_ + 'text-align:center;min-width:120px;">' +
             '<div style="background:#eee;border-radius:4px;overflow:hidden;height:14px;">' +
               '<div style="width:' + r.percent + '%;background:' + barColor + ';height:100%;"></div>' +
             '</div>' +
             '<span style="font-size:11px;">' + r.percent + '%</span>' +
           '</td>';
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;white-space:nowrap;text-align:center;">' + (r.ngayHoanThanhKhoGh ? formatDate(r.ngayHoanThanhKhoGh) : '-') + '</td>';
+          if (vis_('ngayht')) html += '<td style="' + td_ + 'white-space:nowrap;text-align:center;">' + (r.ngayHoanThanhKhoGh ? formatDate(r.ngayHoanThanhKhoGh) : '-') + '</td>';
           html += '</tr>';
         });
 
