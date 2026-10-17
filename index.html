@@ -1686,6 +1686,18 @@
               <button id="vtRefreshBtn" class="icon-btn" title="Làm mới" onclick="loadVtData_()"><i class="fa-solid fa-arrows-rotate"></i></button>
             </div>
           </div>
+          <div class="header-area" style="padding-top:0;">
+            <div class="search-row">
+              <div class="search-input-wrap">
+                <input type="text" id="vtGhSearchInput-nhanvattu" placeholder="Nhập/dán LSX (nhiều LSX cách nhau bởi dấu phẩy, xuống dòng...)" autocomplete="off"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault(); vtGhApplySearch_('nhanvattu');}"
+                  oninput="vtGhOnSearchInput_('nhanvattu')" />
+                <span id="vtGhSearchClear-nhanvattu" class="clear-btn" onclick="vtGhClearSearch_('nhanvattu')" style="display:none;">&times;</span>
+              </div>
+              <button type="button" onclick="vtGhApplySearch_('nhanvattu')">Tìm</button>
+            </div>
+            <div id="vtGhSearchStatus-nhanvattu" style="font-size:12px; color:#888; min-height:16px;"></div>
+          </div>
           <div class="tracking-table-wrap" id="vtResultWrap"></div>
         </div>
 
@@ -1797,6 +1809,18 @@
               </button>
               <button id="ghRefreshBtn" class="icon-btn" title="Làm mới" onclick="loadGhData2_()"><i class="fa-solid fa-arrows-rotate"></i></button>
             </div>
+          </div>
+          <div class="header-area" style="padding-top:0;">
+            <div class="search-row">
+              <div class="search-input-wrap">
+                <input type="text" id="vtGhSearchInput-giaohang" placeholder="Nhập/dán LSX (nhiều LSX cách nhau bởi dấu phẩy, xuống dòng...)" autocomplete="off"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault(); vtGhApplySearch_('giaohang');}"
+                  oninput="vtGhOnSearchInput_('giaohang')" />
+                <span id="vtGhSearchClear-giaohang" class="clear-btn" onclick="vtGhClearSearch_('giaohang')" style="display:none;">&times;</span>
+              </div>
+              <button type="button" onclick="vtGhApplySearch_('giaohang')">Tìm</button>
+            </div>
+            <div id="vtGhSearchStatus-giaohang" style="font-size:12px; color:#888; min-height:16px;"></div>
           </div>
           <div class="tracking-table-wrap" id="ghResultWrap"></div>
         </div>
@@ -2927,7 +2951,41 @@ function confirmModalYes_() {
         rows.forEach(function(r) {
           set.add(normalizeValue(key, r[key]));
         });
-        return Array.from(set).sort();
+        return Array.from(set).sort(function(a, b) {
+          return String(a).localeCompare(String(b), 'vi', { numeric: true });
+        });
+      }
+
+      // Lọc rows theo TẤT CẢ bộ lọc cột, TRỪ cột excludeKey (kiểu Excel: cột đang mở không tự lọc chính nó)
+      function rowsExcludingFilter_(rows, filtersObj, excludeKey) {
+        return rows.filter(function(r) {
+          for (const k in filtersObj) {
+            if (k === String(excludeKey)) continue;
+            const allowed = filtersObj[k];
+            if (!allowed) continue;
+            if (!allowed.has(normalizeValue(k, r[k]))) return false;
+          }
+          return true;
+        });
+      }
+
+      // Dòng nền của Dashboard: đã qua mọi điều kiện của màn hình, CHƯA qua bộ lọc cột
+      function getDashboardBaseRows_() {
+        const todayStr = getTodayStr_();
+        let rows = getDashFilteredRows_(dashboardRows, todayStr);
+        if (dashLsxSearch_ && dashLsxSearch_.length > 0) {
+          rows = rows.filter(function(r) {
+            const lsxLower = String(r.lsx || '').toLowerCase();
+            return dashLsxSearch_.some(function(tok) { return lsxLower.indexOf(tok) !== -1; });
+          });
+        }
+        if (priorityShowAllActive_) {
+          rows = rows.filter(function(r) { return !!priorityTags_[r.lsx] && isPriorityStillRelevant_(r, todayStr); });
+        } else if (priorityFilterActive_ && priorityFilterActive_.size > 0) {
+          rows = rows.filter(function(r) { return priorityFilterActive_.has(priorityTags_[r.lsx]) && isPriorityStillRelevant_(r, todayStr); });
+        }
+        if (dashboardTypeFilter) rows = rows.filter(function(r) { return r.loai === dashboardTypeFilter; });
+        return rows;
       }
 
       function applyFilters(rows) {
@@ -2949,8 +3007,13 @@ function confirmModalYes_() {
         activeFilterTarget = target || 'bom';
         const ds = getFilterDataset_();
         filterPopupKey = key;
-        filterPopupValues = getUniqueValues(ds.rows, key);
-        filterPopupSelected = ds.filters[key] ? new Set(ds.filters[key]) : new Set(filterPopupValues);
+        // Chỉ liệt kê giá trị còn "sống" sau khi áp các bộ lọc KHÁC (kiểu Excel)
+        const cascadeRows_ = rowsExcludingFilter_(ds.baseRows || ds.rows, ds.filters, key);
+        filterPopupValues = getUniqueValues(cascadeRows_, key);
+        const existingSel_ = ds.filters[key];
+        filterPopupSelected = existingSel_
+          ? new Set(filterPopupValues.filter(function(v) { return existingSel_.has(v); }))
+          : new Set(filterPopupValues);
 
         document.getElementById('filterPopupSearch').value = '';
         renderFilterOptions();
@@ -4217,9 +4280,53 @@ function vtGhColumns_() {
 
 const vtGhFilters_ = { nhanvattu: {}, giaohang: {} };
 
+/* ===== Tìm kiếm LSX (dán nhiều LSX cùng lúc) cho Nhận Vật Tư / Giao Hàng ===== */
+const vtGhSearchTokens_ = { nhanvattu: [], giaohang: [] };
+
+function vtGhMatchesSearch_(r, target) {
+  const tokens = vtGhSearchTokens_[target] || [];
+  if (tokens.length === 0) return true;
+  const lsx = String(r.lsx || '').toLowerCase();
+  const lsxStt = String(r.lsx_stt || '').toLowerCase();
+  return tokens.some(function(t) { return lsx.indexOf(t) !== -1 || lsxStt.indexOf(t) !== -1; });
+}
+
+function vtGhRerender_(target) {
+  if (target === 'nhanvattu') renderVtGhTable_('vtResultWrap', vtRows_, 'nhanvattu');
+  else renderVtGhTable_('ghResultWrap', ghRows2_, 'giaohang');
+}
+
+function vtGhOnSearchInput_(target) {
+  const input = document.getElementById('vtGhSearchInput-' + target);
+  const clr = document.getElementById('vtGhSearchClear-' + target);
+  if (clr) clr.style.display = (input && input.value) ? 'block' : 'none';
+}
+
+function vtGhApplySearch_(target) {
+  const input = document.getElementById('vtGhSearchInput-' + target);
+  const raw = input ? input.value : '';
+  const all = raw.split(/[,;\s]+/).map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.length > 0; });
+  const valid = all.filter(function(s) { return s.length >= 3; });
+  if (all.length > 0 && valid.length === 0) {
+    showToast('Từ khóa quá ngắn, vui lòng nhập đầy đủ LSX (kiểm tra lại dấu "/").', 'error');
+    return;
+  }
+  vtGhSearchTokens_[target] = valid;
+  vtGhRerender_(target);
+}
+
+function vtGhClearSearch_(target) {
+  vtGhSearchTokens_[target] = [];
+  const input = document.getElementById('vtGhSearchInput-' + target);
+  if (input) input.value = '';
+  vtGhOnSearchInput_(target);
+  vtGhRerender_(target);
+}
+
 function applyVtGhFilters_(rows, target) {
-  const filtersObj = vtGhFilters_[target];
+  const filtersObj = vtGhFilters_[target] || {};
   return rows.filter(function(r) {
+    if (!vtGhMatchesSearch_(r, target)) return false;
     for (const key in filtersObj) {
       const allowed = filtersObj[key];
       if (!allowed) continue;
@@ -4243,6 +4350,13 @@ function renderVtGhTable_(containerId, rows, target) {
   }).join('') + '</tr>';
 
   const filtered = applyVtGhFilters_(rows, target);
+
+  const statusEl = document.getElementById('vtGhSearchStatus-' + target);
+  if (statusEl) {
+    const searching = (vtGhSearchTokens_[target] || []).length > 0;
+    statusEl.textContent = searching ? ('Tìm thấy ' + filtered.length + '/' + rows.length + ' dòng.') : '';
+  }
+
   if (!filtered || filtered.length === 0) {
     html += '<tr><td colspan="' + cols.length + '" class="empty-state-cell">Không có dữ liệu.</td></tr>';
   } else {
@@ -4409,7 +4523,7 @@ function saveVtGhBatch_() {
       });
     }
   });
-  renderVtGhTable_(containerId, rowsArr);
+  renderVtGhTable_(containerId, rowsArr, mode);
   closeVtGhModal_();
   showToast('Đang lưu ' + items.length + ' món xuống Sheet...', 'info');
 
@@ -4660,13 +4774,20 @@ function onVtGhQrScanSuccess_(decodedText) {
         refreshDarkModeMenuState_();
       }
 
+      // baseRows = dữ liệu sau các điều kiện của màn hình (tìm LSX, nút lọc nhanh...) nhưng CHƯA qua bộ lọc cột
       function getFilterDataset_() {
         if (activeFilterTarget === 'nhanphoi') return { rows: nhanPhoiRows, filters: trackingFilters.nhanphoi };
         if (activeFilterTarget === 'giaohang') return { rows: giaoHangRows, filters: trackingFilters.giaohang };
-        if (activeFilterTarget === 'dashboard') return { rows: dashboardRows, filters: dashboardFilters };
+        if (activeFilterTarget === 'dashboard') return { rows: dashboardRows, baseRows: getDashboardBaseRows_(), filters: dashboardFilters };
         if (activeFilterTarget === 'lsxdetail') return { rows: lsxDetailRawRows, filters: lsxDetailFilters };
-        if (activeFilterTarget === 'vt') return { rows: vtRows_, filters: vtGhFilters_.nhanvattu };
-        if (activeFilterTarget === 'gh') return { rows: ghRows2_, filters: vtGhFilters_.giaohang };
+        if (activeFilterTarget === 'vt') return {
+          rows: vtRows_, filters: vtGhFilters_.nhanvattu,
+          baseRows: vtRows_.filter(function(r) { return vtGhMatchesSearch_(r, 'nhanvattu'); })
+        };
+        if (activeFilterTarget === 'gh') return {
+          rows: ghRows2_, filters: vtGhFilters_.giaohang,
+          baseRows: ghRows2_.filter(function(r) { return vtGhMatchesSearch_(r, 'giaohang'); })
+        };
         if (activeFilterTarget === 'baocaogc_tien') return { rows: baoCaoGcState_.tien.rows, filters: baoCaoGcState_.tien.filters };
         if (activeFilterTarget === 'baocaogc_phay') return { rows: baoCaoGcState_.phay.rows, filters: baoCaoGcState_.phay.filters };
         if (activeFilterTarget === 'baocaogc_nguoi') return { rows: baoCaoGcState_.nguoi.rows, filters: baoCaoGcState_.nguoi.filters };
@@ -5353,12 +5474,32 @@ function onVtGhQrScanSuccess_(decodedText) {
       function tgGcOpenFilter_(arrIdx, iconEl) {
         activeFilterTarget = 'thoigianGC';
         filterPopupKey = arrIdx;
+        // Chỉ lấy các dòng còn lại sau ô tìm LSX + các bộ lọc cột KHÁC
+        const cascadeRows_ = tgGcRows_.filter(function(r) {
+          if (tgGcSearchTokens_.length > 0) {
+            const lsxVal = String(r.values[tgGcLsxArrayIndex_] || '').toLowerCase();
+            if (!tgGcSearchTokens_.some(function(tok) { return lsxVal.indexOf(tok) !== -1; })) return false;
+          }
+          for (const k in tgGcFilters_) {
+            if (k === String(arrIdx)) continue;
+            const allowed = tgGcFilters_[k];
+            if (!allowed) continue;
+            const cell = (r.values[Number(k)] === null || r.values[Number(k)] === undefined) ? '' : String(r.values[Number(k)]);
+            if (!allowed.has(cell)) return false;
+          }
+          return true;
+        });
         const values = new Set();
-        tgGcRows_.forEach(function(r) {
+        cascadeRows_.forEach(function(r) {
           values.add((r.values[arrIdx] === null || r.values[arrIdx] === undefined) ? '' : String(r.values[arrIdx]));
         });
-        filterPopupValues = Array.from(values).sort();
-        filterPopupSelected = tgGcFilters_[arrIdx] ? new Set(tgGcFilters_[arrIdx]) : new Set(filterPopupValues);
+        filterPopupValues = Array.from(values).sort(function(a, b) {
+          return String(a).localeCompare(String(b), 'vi', { numeric: true });
+        });
+        const existingTg_ = tgGcFilters_[arrIdx];
+        filterPopupSelected = existingTg_
+          ? new Set(filterPopupValues.filter(function(v) { return existingTg_.has(v); }))
+          : new Set(filterPopupValues);
         document.getElementById('filterPopupSearch').value = '';
         renderFilterOptions();
         const popup = document.getElementById('filterPopup');
@@ -6494,7 +6635,7 @@ function onVtGhQrScanSuccess_(decodedText) {
           baoCaoGcState_[loai].rows = rows || [];
           baoCaoGcState_[loai].loaded = true;
           baoCaoGcState_[loai].filters = {}; // tìm lệnh mới -> bỏ toàn bộ bộ lọc cũ
-          bcgcSearchCache_[cacheKey] = { ts: Date.now(), rows: rows || [] };
+          if (rows && rows.length > 0) bcgcSearchCache_[cacheKey] = { ts: Date.now(), rows: rows };
           if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
           renderBaoCaoGcTable_(loai);
         }
@@ -8264,6 +8405,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           r.uuTien = priorityMeta_(priorityTags_[r.lsx] || '').label || '(Trống)';
           r.dhTag = dhMeta_(dhTags_[r.lsx] || '').label || '(Trống)';
           r.tienDoBucket = bucketPercent_(r.tienDoPercent);
+          r.vatTuBucket = bucketPercent_(Math.round((Number(r.tinhTrang) || 0) * 100));
           r.khoGiaoHangBucket = bucketPercent_(r.percent);
         });
 
@@ -8345,7 +8487,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           dashColHeader_('uutien', '<th class="dash-priority-col">&#431;u ti&#234;n' + dashFilterIconHtml_('uuTien') + '</th>') +
           dashColHeader_('khgh', '<th class="dash-khgh-col">KHGH' + dashFilterIconHtml_('khgh') + '</th>') +
           chuyenHeaderHtml +
-          dashColHeader_('tiendo', '<th class="dash-progress-col">Tiến độ' + dashFilterIconHtml_('tienDoBucket') + '</th>') +
+          dashColHeader_('tiendo', '<th class="dash-progress-col">Vật tư' + dashFilterIconHtml_('vatTuBucket') + '</th>') +
           dashColHeader_('khogh', '<th>% GH' + dashFilterIconHtml_('khoGiaoHangBucket') + '</th>') +
           dashColHeader_('ngayht', '<th class="dash-khgh-col">Ngày HT' + dashFilterIconHtml_('ngayHoanThanhKhoGh') + '</th>') +
           '</tr>';
@@ -8400,7 +8542,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           if (vis('uutien')) html += '<td' + nextAttrs() + '>' + buildPriorityDropdown_(r.lsx, tag) + '</td>';
           if (vis('khgh')) html += '<td class="dash-khgh-cell"' + nextAttrs() + '>' + formatDate(r.khgh) + '</td>';
           html += chuyenCells;
-          if (vis('tiendo')) html += '<td class="dash-progress-col"' + nextAttrs() + '>' + percentBadge_(r.tienDoDonHang) + '</td>';
+          if (vis('tiendo')) html += '<td class="dash-progress-col"' + nextAttrs() + '>' + percentBadge_(r.tinhTrang) + '</td>';
           if (vis('khogh')) html += '<td style="min-width:120px;"' + nextAttrs() + '>' +
               '<div style="background:#eee; border-radius:4px; overflow:hidden; height:14px;">' +
                 '<div style="width:' + r.percent + '%; background:' + barColor + '; height:100%;"></div>' +
@@ -8498,7 +8640,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
             }
           });
 
-          html += '<td style="border:1px solid #ddd;padding:6px 8px;text-align:center;">' + percentBadge_(r.tienDoDonHang) + '</td>';
+          html += '<td style="border:1px solid #ddd;padding:6px 8px;text-align:center;">' + percentBadge_(r.tinhTrang) + '</td>';
           html += '<td style="border:1px solid #ddd;padding:6px 8px;text-align:center;min-width:120px;">' +
             '<div style="background:#eee;border-radius:4px;overflow:hidden;height:14px;">' +
               '<div style="width:' + r.percent + '%;background:' + barColor + ';height:100%;"></div>' +
@@ -8701,7 +8843,8 @@ window.addEventListener('online', tryFlushPriorityQueue_);
             }
             else if (c.key === 'khgh') val = formatDate(r[c.key]);
             else val = (r[c.key] === null || r[c.key] === undefined) ? '' : escapeHtml_(String(r[c.key]));
-            html += '<td style="border:1px solid #ddd;padding:6px 8px;white-space:nowrap;text-align:center;">' + val + '</td>';
+            const boldCapture_ = (c.key === 'lsx' || c.key === 'sl_dh') ? 'font-weight:800;' : '';
+            html += '<td style="border:1px solid #ddd;padding:6px 8px;white-space:nowrap;text-align:center;' + boldCapture_ + '">' + val + '</td>';
           });
           html += '</tr>';
         });
