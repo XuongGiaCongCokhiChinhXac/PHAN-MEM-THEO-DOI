@@ -1314,41 +1314,52 @@
       return text;
     }
 
-    function callServer_(fnName, args, retriesLeft) {
-      if (retriesLeft === undefined) retriesLeft = 1; // tổng cộng thử tối đa 2 lần
-      // Đang bị chặn hạn mức -> các lệnh gọi ngầm (poll/heartbeat) không gửi đi nữa
+        let authToken_ = '';
+    try { authToken_ = sessionStorage.getItem('gcck_token') || ''; } catch (e) {}
+
+    function setAuthToken_(t) {
+      authToken_ = t || '';
+      try { sessionStorage.setItem('gcck_token', authToken_); } catch (e) {}
+    }
+    function newReqId_() {
+      return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+    function handleAuthExpired_() {
+      showToast('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.', 'error');
+      try { sessionStorage.removeItem('gcck_token'); localStorage.removeItem('gcck_remember_token'); } catch (e) {}
+      setTimeout(function() { location.reload(); }, 1500);
+    }
+
+    function callServer_(fnName, args, retriesLeft, reqId) {
+      if (retriesLeft === undefined) retriesLeft = 1;
+      if (!reqId) reqId = newReqId_(); // GIỮ NGUYÊN khi retry -> server nhận ra là cùng 1 lệnh, không ghi trùng
       if (Date.now() < quotaBlockedUntil_ && QUOTA_SILENT_FUNCTIONS_.indexOf(fnName) !== -1) {
         return Promise.reject(new Error('Tạm dừng do hết hạn mức'));
       }
       const controller = new AbortController();
-      // Apps Script có thể "cold start" 15-25s khi lâu chưa ai gọi. Timeout cũ (20s) hay bị
-      // hủy giữa lúc server sắp xong, rồi thử lại = 1 lượt chạy MỚI (lại cold start từ đầu)
-      // -> lặp vô ích, đúng nguyên nhân "chờ rất lâu mà vẫn không đăng nhập được".
       const timeoutId = setTimeout(function() { controller.abort(); }, 35000);
 
       return fetch(API_URL, {
         method: 'POST',
-        // Dùng text/plain để tránh trình duyệt gửi preflight OPTIONS - Apps Script
-        // không xử lý OPTIONS nên preflight sẽ luôn thất bại nếu dùng application/json.
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ fn: fnName, args: args || [] }),
+        body: JSON.stringify({ fn: fnName, args: args || [], token: authToken_, reqId: reqId }),
         signal: controller.signal
       })
         .then(function(res) { clearTimeout(timeoutId); return res.json(); })
         .then(function(data) {
-          if (!data.ok) throw new Error(friendlyServerError_(data.error));
+          if (!data.ok) {
+            if (data.error === 'AUTH_EXPIRED' && fnName !== 'restoreSession') { handleAuthExpired_(); throw new Error('Phiên đăng nhập hết hạn'); }
+            throw new Error(friendlyServerError_(data.error));
+          }
           return data.result;
         })
         .catch(function(err) {
           clearTimeout(timeoutId);
           const isNetworkError = err instanceof TypeError || err.name === 'AbortError';
           if (isNetworkError && retriesLeft > 0) {
-            const delayMs = (3 - retriesLeft) * 800 + 500; // 500ms, rồi 1300ms
-            return new Promise(function(resolve) {
-              setTimeout(resolve, delayMs);
-            }).then(function() {
-              return callServer_(fnName, args, retriesLeft - 1);
-            });
+            const delayMs = (3 - retriesLeft) * 800 + 500;
+            return new Promise(function(resolve) { setTimeout(resolve, delayMs); })
+              .then(function() { return callServer_(fnName, args, retriesLeft - 1, reqId); });
           }
           throw err;
         });
@@ -1364,9 +1375,10 @@
           if (prop === 'withFailureHandler') return function(cb) { failureCb = cb; return proxy; };
           return function() {
             const args = Array.prototype.slice.call(arguments);
-            callServer_(prop, args)
-              .then(function(result) { if (successCb) successCb(result); })
-              .catch(function(err) { if (failureCb) failureCb(err); });
+            callServer_(prop, args).then(
+              function(result) { if (successCb) successCb(result); },
+              function(err) { if (failureCb) failureCb(err); }
+            );
           };
         }
       });
@@ -1420,7 +1432,7 @@
             style="width:100%; padding:11px 12px; box-sizing:border-box; font-size:15px; border:1px solid #ddd; border-radius:8px; margin-bottom:12px;" />
 
           <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#555; margin-bottom:18px; cursor:pointer;">
-            <input type="checkbox" id="loginRememberCheck" /> Ghi nhớ mật khẩu
+            <input type="checkbox" id="loginRememberCheck" /> Ghi nhớ đăng nhập (30 ngày)
           </label>
 
           <button type="button" id="loginSubmitBtn" onclick="submitLogin_()"
@@ -2447,8 +2459,8 @@ function confirmModalYes_() {
             ' ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
           const dot = isRead ? '' : '<span class="notif-dot"></span>';
           const itemCls = 'notif-item' + (isRead ? ' notif-item-read' : ' notif-item-unread');
-          const lsxForJump = extractLsxFromNotifMessage_(n.message).replace(/'/g, "\\'");
-          return '<div class="' + itemCls + '" onclick="onNotifClick_(' + n.id + ', \'' + lsxForJump + '\')">' +
+          const lsxForJump = jsArg_(extractLsxFromNotifMessage_(n.message));
+          return '<div class="' + itemCls + '" onclick="onNotifClick_(' + Number(n.id) + ', ' + lsxForJump + ')">' +
             dot +
             '<div class="notif-item-body">' +
               '<div class="notif-msg">' + escapeHtml_(n.message) + '</div>' +
@@ -2512,13 +2524,12 @@ function confirmModalYes_() {
       // Gọi khi đăng nhập THÀNH CÔNG - lưu lại thông tin cho lần sau, rồi bật màn hình chờ.
       function finishLogin_(user, remember, passUsed) {
         currentUser_ = user;
+        setAuthToken_(user.token);
         try {
           localStorage.setItem('gcck_last_user', JSON.stringify({ msnv: user.msnv, hoTen: user.hoTen }));
-          if (remember) {
-            localStorage.setItem('gcck_remember_creds', JSON.stringify({ msnv: user.msnv, matKhau: passUsed, hoTen: user.hoTen }));
-          } else {
-            localStorage.removeItem('gcck_remember_creds');
-          }
+          localStorage.removeItem('gcck_remember_creds'); // dọn mật khẩu plaintext của bản cũ
+          if (remember) localStorage.setItem('gcck_remember_token', user.token);
+          else localStorage.removeItem('gcck_remember_token');
         } catch (e) {}
 
         document.getElementById('topbarUserName').textContent = user.hoTen;
@@ -2615,7 +2626,11 @@ function confirmModalYes_() {
         if (newPass !== confirmPass) { errEl.textContent = 'Xác nhận mật khẩu mới không khớp.'; return; }
 
         google.script.run
-          .withSuccessHandler(function() {
+          .withSuccessHandler(function(res) {
+            if (res && res.token) {
+              setAuthToken_(res.token);
+              try { if (localStorage.getItem('gcck_remember_token')) localStorage.setItem('gcck_remember_token', res.token); } catch (e) {}
+            }
             showToast('Đã đổi mật khẩu.', 'success');
             closeChangePasswordModal_();
           })
@@ -2689,7 +2704,7 @@ function confirmModalYes_() {
         }
 
         suggestionsBox.innerHTML = list.map(function(lsx, i) {
-          return '<div data-index="' + i + '" onclick="pickSuggestion(' + i + ')">' + lsx + '</div>';
+          return '<div data-index="' + i + '" onclick="pickSuggestion(' + i + ')">' + escapeHtml_(lsx) + '</div>';
         }).join('');
         suggestionsBox.style.display = 'block';
       }
@@ -3071,8 +3086,8 @@ function confirmModalYes_() {
 
         list.innerHTML = shown.map(function(v) {
           const checked = filterPopupSelected.has(v) ? 'checked' : '';
-          const safeVal = v.replace(/"/g, '&quot;');
-          const label = valueLabel(filterPopupKey, v);
+          const safeVal = escapeHtml_(v);
+          const label = escapeHtml_(valueLabel(filterPopupKey, v));
           return '<label class="filter-option"><input type="checkbox" value="' + safeVal + '" ' +
             checked + ' onchange="toggleFilterOption(this)" /> ' + label + '</label>';
         }).join('') || '<div class="filter-empty">Không có dữ liệu</div>';
@@ -3447,7 +3462,7 @@ function confirmModalYes_() {
           } else if (col.key === 'msct') {
             plainText = value || '';
             display = value
-              ? '<span class="copyable" onclick="copyCell(this)">' + value + '</span>'
+              ? '<span class="copyable" onclick="copyCell(this)">' + escapeHtml_(value) + '</span>'
               : '';
           } else if (col.key === 'ghi_chu') {
             // Chỉ đọc: hiện text thường như các cột khác, không còn textarea để sửa
@@ -3455,12 +3470,12 @@ function confirmModalYes_() {
             display = escapeHtml_(plainText).replace(/\n/g, '<br>');
           } else {
             plainText = value || '';
-            display = plainText;
+            display = escapeHtml_(plainText);
           }
 
           let attrs = getColClass(col);
           if (plainText && col.key !== 'ghi_chu') {
-            attrs += ' data-full="' + String(plainText).replace(/"/g, '&quot;') + '"';
+            attrs += ' data-full="' + escapeHtml_(plainText) + '"';
           }
           attrs += ' data-r="' + rIdx + '" data-c="' + cIdx + '"';
 
@@ -3699,10 +3714,18 @@ function tgGcStickyColClass_(arrIdx) {
       }
 
       function escapeHtml_(str) {
-        return String(str || '')
+        return String(str === null || str === undefined ? '' : str)
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+      // Dùng khi truyền chuỗi vào onclick="..." : tự thành chuỗi JS an toàn
+      function jsArg_(str) { return escapeHtml_(JSON.stringify(String(str === null || str === undefined ? '' : str))); }
+      // Chỉ chấp nhận màu dạng #rgb/#rrggbb, còn lại dùng giá trị dự phòng
+      function safeColor_(c, fallback) {
+        return /^#[0-9a-fA-F]{3,8}$/.test(String(c || '')) ? String(c) : (fallback || '');
       }
 
       function autoGrowNote(el) {
@@ -4513,12 +4536,12 @@ function renderVtGhPendingList_() {
   if (vtGhPendingList_.length === 0) { wrap.style.display = 'none'; saveBtn.textContent = 'Lưu'; return; }
   wrap.style.display = 'block';
   saveBtn.textContent = 'Lưu tất cả (' + vtGhPendingList_.length + ')';
-  body.innerHTML = vtGhPendingList_.map(function(item, i) {
+    body.innerHTML = vtGhPendingList_.map(function(item, i) {
     return '<tr>' +
-      '<td style="border:1px solid #ddd; padding:4px;">' + item.lsx + '</td>' +
-      '<td style="border:1px solid #ddd; padding:4px;">' + item.stt + '</td>' +
-      '<td style="border:1px solid #ddd; padding:4px;">' + (item.tenChiTiet || '') + '</td>' +
-      '<td style="border:1px solid #ddd; padding:4px;">' + item.soLuong + '</td>' +
+      '<td style="border:1px solid #ddd; padding:4px;">' + escapeHtml_(item.lsx) + '</td>' +
+      '<td style="border:1px solid #ddd; padding:4px;">' + escapeHtml_(item.stt) + '</td>' +
+      '<td style="border:1px solid #ddd; padding:4px;">' + escapeHtml_(item.tenChiTiet || '') + '</td>' +
+      '<td style="border:1px solid #ddd; padding:4px;">' + escapeHtml_(item.soLuong) + '</td>' +
       '<td style="border:1px solid #ddd; padding:4px; color:#c62828; cursor:pointer;" onclick="removeVtGhPending_(' + i + ')">&times;</td>' +
       '</tr>';
   }).join('');
@@ -4766,7 +4789,11 @@ function onVtGhQrScanSuccess_(decodedText) {
         // "Thoát" giờ là ĐĂNG XUẤT thật: xoá thông tin đăng nhập đã ghi nhớ (nếu có bật
         // "Nhớ mật khẩu"), rồi tải lại trang để quay về màn hình đăng nhập - vì
         // window.close() gần như luôn bị trình duyệt chặn khi tab không do script tự mở.
-        try { localStorage.removeItem('gcck_remember_creds'); } catch (e) {}
+        try {
+          localStorage.removeItem('gcck_remember_creds');
+          localStorage.removeItem('gcck_remember_token');
+          sessionStorage.removeItem('gcck_token');
+        } catch (e) {}
         location.reload();
       }
 
@@ -6677,7 +6704,7 @@ function onVtGhQrScanSuccess_(decodedText) {
         const clearBtn = document.getElementById('bcgcSearchClear-' + loai);
         if (clearBtn) clearBtn.style.display = raw ? 'block' : 'none';
 
-        const tokens = raw.split(/[,;\s]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length >= 3; });
+        const tokens = raw.split(/[,;\s]+/).map(function(s) { return s.trim().replace(/[^\w.\/\-À-ỹ]/g, ''); }).filter(function(s) { return s.length >= 3; });
         if (tokens.length === 0) {
           showToast('Vui lòng nhập LSX (tối thiểu 3 ký tự, nhớ dấu "/").', 'error');
           return;
@@ -7524,12 +7551,11 @@ function pollPriorityTagsSilently_() {
   // Pill nhỏ gọn: có tag -> hiện màu + chữ; trống -> dùng class riêng để tự đổi màu theo
   // sáng/tối (không hardcode nền trắng nữa - đây là nguyên nhân pill trống bị "nổi trắng" xấu ở chế độ tối).
   function buildPriorityDropdown_(lsx, tag) {
-    const safeLsx = lsx.replace(/'/g, "\\'");
     const meta = priorityMeta_(tag);
-    const style = tag ? ('background:' + meta.bg + '; color:' + meta.color + ';') : '';
+    const style = tag ? ('background:' + safeColor_(meta.bg, '#eee') + '; color:' + safeColor_(meta.color, '#333') + ';') : '';
     const cls = 'priority-pill' + (tag ? '' : ' priority-pill-empty');
-    return '<span class="' + cls + '" style="' + style + '" onclick="openPriorityPopup_(event, \'' + safeLsx + '\')">' +
-      (tag ? meta.label : '') + '</span>';
+    return '<span class="' + cls + '" style="' + style + '" onclick="openPriorityPopup_(event, ' + jsArg_(lsx) + ')">' +
+      (tag ? escapeHtml_(meta.label) : '') + '</span>';
   }
 
   const PRIORITY_POPUP_OPTIONS = [
@@ -7557,7 +7583,10 @@ function pollPriorityTagsSilently_() {
     const url = SUPABASE_URL_DIRECT_ + '/rest/v1/custom_priority_tags?select=value,label,bg,color&order=created_at.asc';
     const res = await fetch(url, { headers: supabaseHeaders_() });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
+    return (await res.json()).map(function(t) {
+      return { value: String(t.value || '').replace(/[^\w\-]/g, ''), label: String(t.label || '').slice(0, 20),
+               bg: safeColor_(t.bg, '#576574'), color: safeColor_(t.color, '#ffffff') };
+    });
   }
 
   async function saveCustomPriorityTagDirect_(tag) {
@@ -7996,9 +8025,25 @@ window.addEventListener('online', tryFlushPriorityQueue_);
             colors = parsed.colors || {}; textColors = parsed.textColors || {};
             fontSizes = parsed.fontSizes || {}; bold = parsed.bold || {};
           }
+          function cleanColorMap(m) {
+            const out = {};
+            Object.keys(m || {}).forEach(function(k) {
+              if (/^\d+_\d+$/.test(k) && safeColor_(m[k])) out[k] = m[k];
+            });
+            return out;
+          }
+          function cleanSizeMap(m) {
+            const out = {};
+            Object.keys(m || {}).forEach(function(k) {
+              const n = Number(m[k]);
+              if (/^\d+_\d+$/.test(k) && n >= 8 && n <= 60) out[k] = n;
+            });
+            return out;
+          }
           return {
             id: r.id, title: r.title || '', subtitle: r.subtitle || '', rows: rowsData,
-            cellColors: colors, cellTextColors: textColors, cellFontSizes: fontSizes, cellBold: bold
+            cellColors: cleanColorMap(colors), cellTextColors: cleanColorMap(textColors),
+            cellFontSizes: cleanSizeMap(fontSizes), cellBold: bold || {}
           };
         });
       }
@@ -8054,7 +8099,10 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     const url = SUPABASE_URL_DIRECT_ + '/rest/v1/custom_order_tags?select=value,label,bg,color&order=created_at.asc';
     const res = await fetch(url, { headers: supabaseHeaders_() });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
+    return (await res.json()).map(function(t) {
+      return { value: String(t.value || '').replace(/[^\w\-]/g, ''), label: String(t.label || '').slice(0, 20),
+               bg: safeColor_(t.bg, '#576574'), color: safeColor_(t.color, '#ffffff') };
+    });
   }
 
   async function saveCustomDhTagDirect_(tag) {
@@ -8138,11 +8186,10 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   }
 
   function buildDhPill_(lsx, tag) {
-    const safeLsx = lsx.replace(/'/g, "\\'");
     const meta = dhMeta_(tag);
-    const style = tag ? ('background:' + meta.bg + '; color:' + meta.color + ';') : '';
+    const style = tag ? ('background:' + safeColor_(meta.bg, '#eee') + '; color:' + safeColor_(meta.color, '#333') + ';') : '';
     const cls = 'priority-pill' + (tag ? '' : ' priority-pill-empty');
-    return '<span class="' + cls + '" style="' + style + '" onclick="openDhPopup_(event, \'' + safeLsx + '\')">' +
+    return '<span class="' + cls + '" style="' + style + '" onclick="openDhPopup_(event, ' + jsArg_(lsx) + ')">' +
       (tag ? escapeHtml_(meta.label) : '') + '</span>';
   }
 
@@ -8344,7 +8391,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     const box = document.getElementById('dashLsxSuggestions');
     if (!list || list.length === 0) { hideDashSuggestions_(); return; }
     box.innerHTML = list.map(function(lsx, i) {
-      return '<div data-index="' + i + '" onclick="pickDashSuggestion_(' + i + ')">' + lsx + '</div>';
+      return '<div data-index="' + i + '" onclick="pickDashSuggestion_(' + i + ')">' + escapeHtml_(lsx) + '</div>';
     }).join('');
     box.style.display = 'block';
   }
@@ -8585,7 +8632,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           const tag = priorityTags_[r.lsx] || '';
           const rowStyle = priorityRowStyle_(tag);
           const rowClass = tag ? ' class="dash-row-priority"' : '';
-          const safeLsxAttr = escapeHtml_(r.lsx).replace(/'/g, "\\'");
+          const safeLsxAttr = jsArg_(r.lsx); // đã có dấu ngoặc kép, dùng trực tiếp bên dưới
           const dataLsxAttr = ' data-lsx="' + escapeHtml_(r.lsx).replace(/"/g, '&quot;') + '"';
           const dhTag = dhTags_[r.lsx] || '';
 
@@ -8594,7 +8641,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           if (vis('lsx')) html += '<td class="dash-lsx-cell"' + nextAttrs() + '>' +
               '<span class="dash-lsx-text">' + escapeHtml_(r.lsx) + '</span>' +
               '<i class="fa-solid fa-eye dash-lsx-eye" title="Xem chi tiết chưa giao hàng" ' +
-                'onclick="event.stopPropagation(); openLsxDetailModal_(\'' + safeLsxAttr + '\')"></i>' +
+                'onclick="event.stopPropagation(); openLsxDetailModal_(' + safeLsxAttr + ')"></i>' +
             '</td>';
           if (vis('sanpham')) html += '<td class="dash-sanpham-col"' + nextAttrs() + '>' + escapeHtml_(r.sanPham || '') + '</td>';
           if (vis('uutien')) html += '<td' + nextAttrs() + '>' + buildPriorityDropdown_(r.lsx, tag) + '</td>';
@@ -8680,7 +8727,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           const tag = priorityTags_[r.lsx] || '';
           const meta = priorityMeta_(tag);
           const tagHtml = tag
-            ? '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;background:' + meta.bg + ';color:' + meta.color + ';">' + meta.label + '</span>'
+            ? '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;'font-weight:800;background:' + safeColor_(meta.bg, '#eee') + ';color:' + safeColor_(meta.color, '#333') + ';">' + escapeHtml_(meta.label) + '</span>'
             : '';
           const dhTagVal = dhTags_[r.lsx] || '';
           const dhMetaVal = dhMeta_(dhTagVal);
@@ -9551,23 +9598,11 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         }
       }
 
-      function loadInitialAppData_() {
+            function loadInitialAppData_() {
         google.script.run
-          .withSuccessHandler(function(data) {
-            renderSyncStatus_(data.lastSyncTime);
-            nhanPhoiRows = data.nhanPhoi || [];
-            giaoHangRows = data.giaoHang || [];
-            trackingLoaded.nhanphoi = true;
-            trackingLoaded.giaohang = true;
-            renderTrackingTable_('nhanPhoiResult', applyTrackingFilters_(nhanPhoiRows, trackingFilters.nhanphoi), 'nhanphoi');
-            renderTrackingTable_('giaoHangResult', applyTrackingFilters_(giaoHangRows, trackingFilters.giaohang), 'giaohang');
-          })
-          .withFailureHandler(function(err) {
-            renderTrackingTable_('nhanPhoiResult', [], 'nhanphoi');
-            renderTrackingTable_('giaoHangResult', [], 'giaohang');
-            showToast('Không tải được dữ liệu ban đầu: ' + err.message, 'error');
-          })
-          .getInitialAppData();
+          .withSuccessHandler(renderSyncStatus_)
+          .withFailureHandler(function() { /* im lặng, 2 phút sau tự làm mới */ })
+          .getLastSyncTime();
       }
 
       /* ================= NHÂN SỰ (gộp chung app, không mở tab mới nữa) =================
@@ -9972,13 +10007,47 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         if (notif && notif.classList.contains('open')) closeNotifModal_();
       });
 
+    try { localStorage.removeItem('gcck_remember_creds'); } catch (e) {} // dọn mật khẩu plaintext đã lưu từ trước
     applyLoginScreenState_();
+
+        function tryAutoLogin_() {
+      let tk = '';
+      try { tk = localStorage.getItem('gcck_remember_token') || ''; } catch (e) {}
+      if (!tk) return;
+
+      setAuthToken_(tk);
+      let lastUser = null;
+      try { lastUser = JSON.parse(localStorage.getItem('gcck_last_user') || 'null'); } catch (e) {}
+
+      document.getElementById('loginOverlay').style.display = 'none';
+      resetSplashUI_();
+      showGreeting_(lastUser && lastUser.hoTen);
+      const splashEl = document.getElementById('splashOverlay');
+      splashEl.style.display = 'flex';
+      splashEl.style.opacity = '1';
+      startSplashProgress_();
+
+      google.script.run
+        .withSuccessHandler(function(user) { finishLogin_(user, true, ''); })
+        .withFailureHandler(function() {
+          // Token hết hạn/bị thu hồi -> quay về form đăng nhập bình thường
+          try { localStorage.removeItem('gcck_remember_token'); } catch (e) {}
+          setAuthToken_('');
+          if (splashTimer) { clearInterval(splashTimer); splashTimer = null; }
+          splashEl.style.opacity = '0';
+          splashEl.style.display = 'none';
+          document.getElementById('loginOverlay').style.display = 'flex';
+        })
+        .restoreSession();
+    }
+    tryAutoLogin_();
 
     // "Đăng nhập tài khoản khác": xoá thông tin đã nhớ, quay về form nhập MSNV trống.
     function switchLoginAccount_() {
       try {
         localStorage.removeItem('gcck_last_user');
         localStorage.removeItem('gcck_remember_creds');
+        localStorage.removeItem('gcck_remember_token');
       } catch (e) {}
       document.getElementById('loginMsnvInput').value = '';
       document.getElementById('loginPasswordInput').value = '';
@@ -10085,7 +10154,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         google.script.run
           .withSuccessHandler(function(user) { finishLogin_(user, remember, pass); })
           .withFailureHandler(onFail)
-          .loginUser(msnv, pass);
+          .loginUser(msnv, pass, remember);
       }
     }
     </script>
