@@ -1376,7 +1376,14 @@
           return function() {
             const args = Array.prototype.slice.call(arguments);
             callServer_(prop, args).then(
-              function(result) { if (successCb) successCb(result); },
+              function(result) {
+                if (!successCb) return;
+                try { successCb(result); }
+                catch (e) {
+                  console.error('Lỗi trong successHandler của ' + String(prop) + ':', e);
+                  if (failureCb) failureCb(e);
+                }
+              },
               function(err) { if (failureCb) failureCb(err); }
             );
           };
@@ -8727,7 +8734,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           const tag = priorityTags_[r.lsx] || '';
           const meta = priorityMeta_(tag);
           const tagHtml = tag
-            ? '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;'font-weight:800;background:' + safeColor_(meta.bg, '#eee') + ';color:' + safeColor_(meta.color, '#333') + ';">' + escapeHtml_(meta.label) + '</span>'
+            ? '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;background:' + safeColor_(meta.bg, '#eee') + ';color:' + safeColor_(meta.color, '#333') + ';">' + escapeHtml_(meta.label) + '</span>'
             : '';
           const dhTagVal = dhTags_[r.lsx] || '';
           const dhMetaVal = dhMeta_(dhTagVal);
