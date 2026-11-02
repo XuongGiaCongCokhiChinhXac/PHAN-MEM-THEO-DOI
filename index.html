@@ -7718,7 +7718,7 @@ function pollPriorityTagsSilently_() {
     customPriorityTags_ = customPriorityTags_.filter(function(c) { return c.value !== value; });
     saveCustomPriorityTagsCache_();
 
-    deleteCustomPriorityTagDirect_(value).catch(function() {
+    deleteCustomPriorityTagDirect_(value).then(schedulePrioritySheetSync_).catch(function() {
       showToast('Chưa xoá được nhãn trên máy chủ (mất mạng?), sẽ còn hiện lại ở máy khác.', 'info');
     });
   }
@@ -7862,7 +7862,7 @@ function pollPriorityTagsSilently_() {
         tag.bg = customPriorityChosenColor_;
         tag.color = pickTextColorForBg_(customPriorityChosenColor_);
         saveCustomPriorityTagsCache_();
-        updateCustomPriorityTagDirect_(tag).catch(function() {
+        updateCustomPriorityTagDirect_(tag).then(schedulePrioritySheetSync_).catch(function() {
           showToast('Chưa đồng bộ được thay đổi nhãn "' + name + '" lên máy chủ (mất mạng?).', 'info');
         });
         if (dashboardRenderedOnce_) renderDashboard_(); // các LSX đang gắn nhãn này đổi tên/màu ngay
@@ -7928,6 +7928,18 @@ async function savePriorityTagDirect_(lsx, tag) {
   if (!res.ok) throw new Error('HTTP ' + res.status);
 }
 
+/* ===== Cập nhật Google Sheet "ĐH ƯT" sau khi nhãn ưu tiên đổi (gom 4 giây/lần) ===== */
+let prioSheetSyncTimer_ = null;
+function schedulePrioritySheetSync_() {
+  clearTimeout(prioSheetSyncTimer_);
+  prioSheetSyncTimer_ = setTimeout(function() {
+    google.script.run
+      .withSuccessHandler(function() { /* im lặng */ })
+      .withFailureHandler(function() { /* im lặng, trigger 15 phút sẽ bù */ })
+      .syncPrioritySheetNow();
+  }, 4000);
+} 
+
 /* ================= HÀNG ĐỢI DỰ PHÒNG - chỉ dùng khi mất mạng hẳn, hiếm khi cần tới ================= */
 const PRIORITY_SAVE_QUEUE_KEY = 'gcck_priority_save_queue';
 
@@ -7949,6 +7961,7 @@ function queuePriorityTagSave_(lsx, tag) {
 function savePriorityTagWithRetry_(lsx, tag) {
   savePriorityTagDirect_(lsx, tag)
     .then(function() {
+      schedulePrioritySheetSync_();
       const queue = getPrioritySaveQueue_();
       if (queue.hasOwnProperty(lsx) && queue[lsx] === tag) {
         delete queue[lsx];
@@ -7977,6 +7990,7 @@ function tryFlushPriorityQueue_() {
 
   savePriorityTagDirect_(lsx, tag)
     .then(function() {
+      schedulePrioritySheetSync_();
       const q = getPrioritySaveQueue_();
       if (q[lsx] === tag) { delete q[lsx]; setPrioritySaveQueue_(q); }
       isFlushingPriorityQueue_ = false;
