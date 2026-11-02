@@ -1721,6 +1721,7 @@
               <button type="button" class="btn-primary-blue" onclick="openVtGhModal_('nhanvattu')">
                 <i class="fa-solid fa-plus"></i> Nhận vật tư
               </button>
+              <button type="button" class="icon-btn" title="Chụp ảnh bảng đang xem" onclick="captureTableFromContainer_('vtResultWrap','NhanVatTu')"><i class="fa-solid fa-camera"></i></button>
               <button id="vtRefreshBtn" class="icon-btn" title="Làm mới" onclick="loadVtData_()"><i class="fa-solid fa-arrows-rotate"></i></button>
             </div>
           </div>
@@ -1791,7 +1792,8 @@
               <div style="display:flex; gap:8px; align-items:center;">
                 <div id="bcgcStatus-tien" style="font-size:12px; color:#888; white-space:nowrap;"></div>
                 <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_tien')"><i class="fa-solid fa-table-columns"></i></button>
-                <button type="button" id="bcgcRefreshBtn-tien" class="icon-btn" title="Tìm lại" onclick="bcgcApplySearch_('tien')"><i class="fa-solid fa-arrows-rotate"></i></button>
+                <button type="button" class="icon-btn" title="Chụp ảnh bảng đang xem" onclick="captureTableFromContainer_('bcgcTableWrap-tien','BaoCaoGC_Tien')"><i class="fa-solid fa-camera"></i></button>
+                <button type="button" id="bcgcRefreshBtn-tien" class="icon-btn" title="Làm mới từ Sheet" onclick="bcgcApplySearch_('tien', true)"><i class="fa-solid fa-arrows-rotate"></i></button>
               </div>
             </div>
             <div id="bcgcTableWrap-tien" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
@@ -1811,7 +1813,8 @@
               <div style="display:flex; gap:8px; align-items:center;">
                 <div id="bcgcStatus-phay" style="font-size:12px; color:#888; white-space:nowrap;"></div>
                 <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_phay')"><i class="fa-solid fa-table-columns"></i></button>
-                <button type="button" id="bcgcRefreshBtn-phay" class="icon-btn" title="Làm mới" onclick="bcgcApplySearch_('phay')"><i class="fa-solid fa-arrows-rotate"></i></button>
+                                <button type="button" class="icon-btn" title="Chụp ảnh bảng đang xem" onclick="captureTableFromContainer_('bcgcTableWrap-phay','BaoCaoGC_Phay')"><i class="fa-solid fa-camera"></i></button>
+                <button type="button" id="bcgcRefreshBtn-phay" class="icon-btn" title="Làm mới từ Sheet" onclick="bcgcApplySearch_('phay', true)"><i class="fa-solid fa-arrows-rotate"></i></button>
               </div>
             </div>
             <div id="bcgcTableWrap-phay" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
@@ -1831,7 +1834,8 @@
               <div style="display:flex; gap:8px; align-items:center;">
                 <div id="bcgcStatus-nguoi" style="font-size:12px; color:#888; white-space:nowrap;"></div>
                 <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('baocaogc_nguoi')"><i class="fa-solid fa-table-columns"></i></button>
-                <button type="button" id="bcgcRefreshBtn-nguoi" class="icon-btn" title="Làm mới" onclick="bcgcApplySearch_('nguoi')"><i class="fa-solid fa-arrows-rotate"></i></button>
+               <button type="button" class="icon-btn" title="Chụp ảnh bảng đang xem" onclick="captureTableFromContainer_('bcgcTableWrap-nguoi','BaoCaoGC_Nguoi')"><i class="fa-solid fa-camera"></i></button>
+                <button type="button" id="bcgcRefreshBtn-nguoi" class="icon-btn" title="Làm mới từ Sheet" onclick="bcgcApplySearch_('nguoi', true)"><i class="fa-solid fa-arrows-rotate"></i></button>
               </div>
             </div>
             <div id="bcgcTableWrap-nguoi" class="tracking-table-wrap" style="flex:1; padding:0 16px 16px 16px;"></div>
@@ -1845,6 +1849,7 @@
               <button type="button" class="btn-primary-blue" onclick="openVtGhModal_('giaohang')">
                 <i class="fa-solid fa-plus"></i> Giao hàng
               </button>
+              <button type="button" class="icon-btn" title="Chụp ảnh bảng đang xem" onclick="captureTableFromContainer_('ghResultWrap','GiaoHang')"><i class="fa-solid fa-camera"></i></button>
               <button id="ghRefreshBtn" class="icon-btn" title="Làm mới" onclick="loadGhData2_()"><i class="fa-solid fa-arrows-rotate"></i></button>
             </div>
           </div>
@@ -4358,11 +4363,14 @@ let vtGhMode_ = 'nhanvattu'; // 'nhanvattu' | 'giaohang2'
 let vtGhQrScanner_ = null;
 let vtGhAutoFillReqId_ = 0;
 
-function vtGhColumns_() {
+function vtGhColumns_(target) {
+  const isGiao = (target === 'giaohang');
   return [
     { key: 'lsx_stt', label: 'LSX-STT' }, { key: 'lsx', label: 'LSX' }, { key: 'stt', label: 'STT' },
     { key: 'msct', label: 'MSCT' }, { key: 'ten_chi_tiet', label: 'Tên chi tiết' }, { key: 'sl_dh', label: 'SL/ĐH' },
-    { key: 'so_luong', label: 'SL' }, { key: 'nguoi', label: 'Người' }, { key: 'ngay', label: 'Ngày' }
+    { key: 'so_luong', label: isGiao ? 'SL giao' : 'SL nhận' },
+    { key: 'nguoi', label: isGiao ? 'Người giao' : 'Người nhận' },
+    { key: 'ngay', label: isGiao ? 'Ngày giao' : 'Ngày nhận' }
   ];
 }
 
@@ -4425,7 +4433,7 @@ function applyVtGhFilters_(rows, target) {
 }
 
 function renderVtGhTable_(containerId, rows, target) {
-  const cols = vtGhColumns_();
+  const cols = vtGhColumns_(target);
   const el = document.getElementById(containerId);
   const filtersObj = vtGhFilters_[target] || {};
   const popupTarget = target === 'nhanvattu' ? 'vt' : 'gh';
@@ -5738,6 +5746,7 @@ function onVtGhQrScanSuccess_(decodedText) {
 
       function khbusRenderSlideList_() {
         const wrap = document.getElementById('khbusSlideList');
+        const keepListTop_ = wrap.scrollTop;
         const dark = khbusIsDark_();
         const border = dark ? '#3a3f4a' : '#d5d9e0';
         const numColor = dark ? '#9aa0ab' : '#6b7280';
@@ -5755,6 +5764,7 @@ function onVtGhQrScanSuccess_(decodedText) {
         }).join('') +
         '<button type="button" onclick="khbusAddSlide_()" style="margin-left:24px; border:2px dashed ' + (dark ? '#3a3f4a' : '#bbb') + '; background:none; border-radius:8px; padding:12px; color:' + (dark ? '#9aa0ab' : '#666') + '; cursor:pointer; font-size:13px; font-weight:700;">' +
           '<i class="fa-solid fa-plus"></i> Thêm slide</button>';
+        wrap.scrollTop = keepListTop_;
       }
 
       function khbusSelectSlide_(i) {
@@ -5997,7 +6007,12 @@ function onVtGhQrScanSuccess_(decodedText) {
         sel.addRange(range);
       }
 
+      let khbusLastRenderedIndex_ = -1;
       function khbusRenderCanvas_() {
+        // Nhớ vị trí cuộn của bảng (chỉ khi vẫn đang ở cùng 1 slide)
+        const oldBody_ = document.querySelector('#khbusSlideCanvas .khbus-slide-body');
+        const keepTop_ = (oldBody_ && khbusLastRenderedIndex_ === khbusCurrentIndex_) ? oldBody_.scrollTop : 0;
+        const keepLeft_ = (oldBody_ && khbusLastRenderedIndex_ === khbusCurrentIndex_) ? oldBody_.scrollLeft : 0;
         // Cùng slide và đang có vùng chọn -> giữ nguyên vùng chọn sau khi vẽ lại
         const keepSel_ = (khbusSelSlide_ === khbusCurrentIndex_ && khbusSelRegions.length > 0);
         if (!keepSel_) khbusClearSelection_();
@@ -6107,6 +6122,9 @@ function onVtGhQrScanSuccess_(decodedText) {
           '<div class="khbus-slide-footer"><span>Xưởng Gia Công Cơ Khí Chính Xác</span><span>' +
           (khbusCurrentIndex_ + 1) + ' / ' + khbusSlides_.length + '</span></div></div>';
         canvas.innerHTML = html;
+        khbusLastRenderedIndex_ = khbusCurrentIndex_;
+        const newBody_ = canvas.querySelector('.khbus-slide-body');
+        if (newBody_) { newBody_.scrollTop = keepTop_; newBody_.scrollLeft = keepLeft_; }
         if (keepSel_) khbusPaintSelection_();
       }
 
@@ -6706,7 +6724,7 @@ function onVtGhQrScanSuccess_(decodedText) {
         });
       }
 
-      function bcgcApplySearch_(loai) {
+            function bcgcApplySearch_(loai, forceSheet) {
         const raw = document.getElementById('bcgcSearchInput-' + loai).value;
         const clearBtn = document.getElementById('bcgcSearchClear-' + loai);
         if (clearBtn) clearBtn.style.display = raw ? 'block' : 'none';
@@ -6723,13 +6741,15 @@ function onVtGhQrScanSuccess_(decodedText) {
         const myId = ++bcgcSearchReqId_[loai];
 
         function finish(rows) {
-          if (myId !== bcgcSearchReqId_[loai]) return; // đã có lượt tìm mới hơn
+          if (myId !== bcgcSearchReqId_[loai]) return;
           baoCaoGcState_[loai].rows = rows || [];
           baoCaoGcState_[loai].loaded = true;
-          baoCaoGcState_[loai].filters = {}; // tìm lệnh mới -> bỏ toàn bộ bộ lọc cũ
+          baoCaoGcState_[loai].filters = {};
           if (rows && rows.length > 0) bcgcSearchCache_[cacheKey] = { ts: Date.now(), rows: rows };
+          else delete bcgcSearchCache_[cacheKey];
           if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
           renderBaoCaoGcTable_(loai);
+          if (forceSheet) showToast('Đã đối chiếu lại với Google Sheet: ' + (rows ? rows.length : 0) + ' dòng.', 'success');
         }
         function fail(err) {
           if (myId !== bcgcSearchReqId_[loai]) return;
@@ -6741,21 +6761,20 @@ function onVtGhQrScanSuccess_(decodedText) {
           google.script.run
             .withSuccessHandler(finish)
             .withFailureHandler(fail)
-            .searchBaoCaoGC(loai, tokens.join(','));
+            .searchBaoCaoGC(loai, tokens.join(','), !!forceSheet);
         }
 
-        // Có sẵn trong bộ nhớ (vừa tìm xong) -> hiện ngay, không gọi mạng
+        if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+        if (statusEl) statusEl.textContent = forceSheet ? 'Đang đọc lại từ Sheet...' : 'Đang tìm...';
+
+        // Nút 🔄 (forceSheet) -> bỏ qua cache + Supabase, đọc thẳng Sheet cho chắc đủ dòng
+        if (forceSheet) { viaServer(); return; }
+
         const hit = bcgcSearchCache_[cacheKey];
         if (hit && (Date.now() - hit.ts) < BCGC_CLIENT_CACHE_MS_) { finish(hit.rows); return; }
 
-        if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
-        if (statusEl) statusEl.textContent = 'Đang tìm...';
-
         bcgcFetchDirect_(loai, tokens)
-          .then(function(rows) {
-            if (rows.length > 0) finish(rows);
-            else viaServer(); // 0 kết quả: hỏi lại server (phòng khi bảng chưa nạp xong). Khi đã nạp đủ có thể đổi thành finish(rows)
-          })
+          .then(function(rows) { if (rows.length > 0) finish(rows); else viaServer(); })
           .catch(viaServer);
       }
 
@@ -8859,12 +8878,21 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       }
 
       // Dòng thống kê: Tổng chi tiết / Đã giao / % Giao hàng / % Nhận VT, hiện ngay cạnh tiêu đề modal.
-      function renderLsxDetailSummary_(lsx, rows) {
+            function renderLsxDetailSummary_(lsx, rows) {
         const total = rows.length;
         const delivered = rows.filter(function(r) { return r.giao_hang; }).length;
         const receivedVT = rows.filter(function(r) { return r.nhan_vat_tu; }).length;
         const deliveredPct = total ? Math.round((delivered / total) * 100) : 0;
         const vtPct = total ? Math.round((receivedVT / total) * 100) : 0;
+
+        // Ngày KHGH: ưu tiên số liệu Dashboard, không có thì lấy từ BOM
+        let khgh = '';
+        const dashRow_ = dashboardRows.find(function(d) { return d.lsx === lsx; });
+        if (dashRow_ && dashRow_.khgh) khgh = dashRow_.khgh;
+        if (!khgh) {
+          const withDate_ = rows.find(function(r) { return r.khgh; });
+          if (withDate_) khgh = withDate_.khgh;
+        }
 
         function statBadge_(label, value, bg, fg) {
           return '<span style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; ' +
@@ -8874,6 +8902,14 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           '</span>';
         }
 
+        const khghHtml = khgh
+          ? '<div style="margin-top:8px;">' +
+              '<span style="display:inline-flex; align-items:center; gap:8px; padding:5px 14px; border-radius:6px; ' +
+              'background:#fff3e0; color:#d84315; border:1.5px solid #ff8a3d; font-size:14px; font-weight:800; white-space:nowrap;">' +
+              '<i class="fa-regular fa-calendar-check"></i>KHGH - ' + formatDate(khgh) + '</span>' +
+            '</div>'
+          : '';
+
         document.getElementById('lsxDetailTitle').innerHTML =
           '<span style="display:inline-flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
             '<b style="font-size:15px; color:#003DA5;">' + escapeHtml_(lsx) + '</b>' +
@@ -8881,7 +8917,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
             statBadge_('Đã giao', delivered, '#e8f0fe', '#1a56c4') +
             statBadge_('Giao hàng', deliveredPct + '%', '#e6f4ea', '#1e7e34') +
             statBadge_('Nhận VT', vtPct + '%', '#fff8e1', '#8a6d00') +
-          '</span>';
+          '</span>' + khghHtml;
       }
 
       function closeLsxDetailModal_() {
@@ -8929,6 +8965,78 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
         html += '</tbody>';
         table.innerHTML = html;
+      }
+
+            /* ================= CHỤP ẢNH BẢNG ĐANG HIỂN THỊ (dùng chung) ================= */
+      function deliverCapturedCanvas_(canvas, fileName) {
+        canvas.toBlob(function(blob) {
+          if (!blob) { showToast('Không tạo được ảnh.', 'error'); return; }
+          function download_() {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fileName + '_' + Date.now() + '.png'; a.click();
+            setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+          }
+          if (navigator.clipboard && window.ClipboardItem) {
+            navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+              .then(function() { showToast('Đã chụp ảnh và copy vào clipboard, dán (Ctrl+V) để gửi.', 'success'); })
+              .catch(function() { download_(); showToast('Trình duyệt chặn clipboard, đã tải ảnh về máy.', 'info'); });
+          } else {
+            download_();
+            showToast('Trình duyệt không hỗ trợ copy ảnh, đã tải ảnh về máy.', 'info');
+          }
+        }, 'image/png');
+      }
+
+      function captureTableFromContainer_(containerId, fileName) {
+        if (typeof html2canvas === 'undefined') {
+          showToast('Chưa tải được thư viện chụp ảnh, vui lòng thử lại sau vài giây.', 'error');
+          return;
+        }
+        const container = document.getElementById(containerId);
+        const srcTable = container ? container.querySelector('table') : null;
+        if (!srcTable || srcTable.rows.length < 2 || srcTable.querySelector('.empty-state-cell')) {
+          showToast('Không có dữ liệu để chụp.', 'error');
+          return;
+        }
+
+        showToast('Đang tạo ảnh, vui lòng đợi...', 'info');
+
+        const clone = srcTable.cloneNode(true);
+        // Bỏ icon lọc và trạng thái chọn ô - ảnh chỉ giữ đúng nội dung/màu của bảng
+        clone.querySelectorAll('.filter-icon').forEach(function(el) { el.remove(); });
+        clone.querySelectorAll('.cell-selected, .cell-active, .row-focus, .tgGc-row-selected').forEach(function(el) {
+          el.classList.remove('cell-selected', 'cell-active', 'row-focus', 'tgGc-row-selected');
+        });
+
+        const MAX_ROWS = 600;
+        if (clone.rows.length - 1 > MAX_ROWS) {
+          Array.from(clone.rows).slice(MAX_ROWS + 1).forEach(function(r) { r.remove(); });
+          showToast('Bảng quá dài, chỉ chụp ' + MAX_ROWS + ' dòng đầu.', 'info');
+        }
+
+        const dark = document.body.classList.contains('dark-mode');
+        const bg = dark ? '#14171c' : '#ffffff';
+        const wrapper = document.createElement('div');
+        // Giữ class tracking-table-wrap để các rule CSS của bảng (màu xen kẽ, in đậm...) vẫn áp dụng
+        wrapper.className = 'tracking-table-wrap cap-wrap';
+        wrapper.style.cssText = 'position:fixed; left:-99999px; top:0; flex:none; overflow:visible; height:auto; min-height:0;' +
+          'padding:12px; box-sizing:content-box; background:' + bg + '; width:' + srcTable.offsetWidth + 'px;';
+        // Tiêu đề cột đang "sticky" -> ép về static để chụp không bị lệch
+        wrapper.insertAdjacentHTML('afterbegin', '<style>.cap-wrap th, .cap-wrap td { position: static !important; }</style>');
+        wrapper.appendChild(clone);
+        document.body.appendChild(wrapper);
+
+        const w = wrapper.offsetWidth, h = wrapper.offsetHeight;
+        const scale = Math.max(0.5, Math.min(2, 16000 / Math.max(h, 1), 16000 / Math.max(w, 1)));
+
+        html2canvas(wrapper, { backgroundColor: bg, scale: scale, useCORS: true }).then(function(canvas) {
+          document.body.removeChild(wrapper);
+          deliverCapturedCanvas_(canvas, fileName || 'bang');
+        }).catch(function(err) {
+          if (wrapper.parentNode) document.body.removeChild(wrapper);
+          showToast('Lỗi khi chụp ảnh: ' + err.message, 'error');
+        });
       }
 
             function captureLsxDetailModal_() {
