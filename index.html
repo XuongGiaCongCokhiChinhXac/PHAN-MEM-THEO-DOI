@@ -1362,6 +1362,47 @@
         border-radius: 6px; font-size: 14px;
       }
 
+      /* ===== Modal xác nhận chuyên nghiệp (giữa màn hình) ===== */
+.pm-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); backdrop-filter: blur(3px);
+  display: none; align-items: center; justify-content: center; z-index: 650; padding: 16px; }
+.pm-modal { width: 440px; max-width: 100%; max-height: 92vh; display: flex; flex-direction: column;
+  background: #fff; border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.35); overflow: hidden;
+  animation: pmPop .18s ease-out; }
+@keyframes pmPop { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+.pm-head { padding: 24px 24px 8px; text-align: center; }
+.pm-icon { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 14px; }
+.pm-icon.danger { background: #fdecea; color: #c62828; }
+.pm-icon.primary { background: #e8f0fe; color: #1a56c4; }
+.pm-icon.success { background: #e6f4ea; color: #1e7e34; }
+.pm-icon.warning { background: #fff4e0; color: #b45309; }
+.pm-title { font-size: 17px; font-weight: 800; color: #1f2937; margin-bottom: 6px; }
+.pm-desc { font-size: 13.5px; color: #6b7280; line-height: 1.55; }
+.pm-body { padding: 8px 24px 4px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.pm-foot { display: flex; gap: 10px; padding: 18px 24px 22px; }
+.pm-btn { flex: 1; padding: 11px 14px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.pm-btn.cancel { background: #eef0f3; color: #374151; }
+.pm-btn.cancel:hover { background: #e3e6ea; }
+.pm-btn.danger { background: #c62828; color: #fff; }
+.pm-btn.warning { background: #d97706; color: #fff; }
+.pm-btn.primary { background: #1a73e8; color: #fff; }
+.pm-btn.success { background: #1e7e34; color: #fff; }
+.pm-btn:disabled { opacity: .45; cursor: not-allowed; }
+.pm-overlay[data-tone="success"] .adm-choice.selected { border-color: #1e7e34; background: #effaf1; }
+body.dark-mode .pm-modal { background: #1c1f26; }
+body.dark-mode .pm-title { color: #eceef0; }
+body.dark-mode .pm-desc { color: #9aa0ab; }
+body.dark-mode .pm-btn.cancel { background: #2a2e37; color: #d8dadf; }
+body.dark-mode .pm-overlay[data-tone="success"] .adm-choice.selected { background: #17301f; }
+
+/* ===== Up/Xóa BOM bổ sung ===== */
+#admBomTableWrap tr[data-i] input[type=checkbox] { pointer-events: none; } /* click xuyên xuống dòng để kéo chọn */
+#admUpTable td.adm-up-ro { background: #f1f5fb; color: #1a56c4; font-weight: 700; cursor: default; }
+body.dark-mode #admUpTable td.adm-up-ro { background: #202838; color: #8fc1ff; }
+.adm-date-box { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border: 1px solid #ddd; border-radius: 14px; background: #fff; font-size: 12px; font-weight: 700; color: #444; }
+.adm-date-box input { border: none; outline: none; background: transparent; font-size: 13px; font-weight: 700; color: #1a56c4; padding: 2px 0; width: auto; }
+body.dark-mode .adm-date-box { background: #23262d; border-color: #3a3f4a; color: #d8dadf; }
+.quick-btn:disabled { opacity: .5; cursor: not-allowed; }
+
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   </head>
@@ -1413,7 +1454,8 @@
         return Promise.reject(new Error('Tạm dừng do hết hạn mức'));
       }
       const controller = new AbortController();
-      const timeoutId = setTimeout(function() { controller.abort(); }, 35000);
+      const timeoutMs_ = (fnName === 'adminUpBom' || fnName === 'adminDeleteBom') ? 120000 : 35000;
+const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs_);
 
       return fetch(API_URL, {
         method: 'POST',
@@ -1685,12 +1727,6 @@
               <i class="fa-solid fa-hammer"></i><span class="nav-label">Nguội</span>
             </button>
           </div>
-          <div class="sidebar-divider"></div>
-          <button type="button" class="sidebar-nav-btn" id="sidebarCategoryToggleBtn" onclick="toggleSidebarCategoryList_()" style="justify-content:space-between; width:100%;">
-            <span style="display:flex; align-items:center; gap:10px;"><i class="fa-solid fa-layer-group"></i><span class="nav-label">Loại đơn hàng</span></span>
-            <i class="fa-solid fa-chevron-down nav-label" id="sidebarCategoryChevron" style="transition:transform 0.2s ease;"></i>
-          </button>
-          <div id="sidebarCategoryButtons" class="sidebar-category-list" style="display:none;"></div>
         </div>
 
         <div id="sidebarNhanSuGroup" style="display:none;">
@@ -2158,12 +2194,21 @@
         }, 3200);
       }
 
-      let confirmModalCallback_ = null;
-function openConfirmModal_(title, desc, onConfirm) {
+      function openConfirmModal_(title, desc, onConfirm, opts) {
+  opts = opts || {};
+  const tone = opts.tone || 'danger';
   document.getElementById('confirmModalTitle').textContent = title;
   document.getElementById('confirmModalDesc').textContent = desc || '';
+  const icon = document.getElementById('confirmModalIcon');
+  icon.className = 'pm-icon ' + tone;
+  icon.innerHTML = '<i class="fa-solid ' + (opts.icon || (tone === 'danger' ? 'fa-trash' : 'fa-circle-question')) + '"></i>';
+  const ok = document.getElementById('confirmModalOkBtn');
+  ok.className = 'pm-btn ' + tone;
+  ok.textContent = opts.okText || (tone === 'danger' ? 'Xóa' : 'Xác nhận');
+  document.getElementById('confirmModalCancelBtn').textContent = opts.cancelText || 'Hủy';
   confirmModalCallback_ = onConfirm;
   document.getElementById('confirmModalOverlay').style.display = 'flex';
+  setTimeout(function() { ok.focus(); }, 30);
 }
 function closeConfirmModal_() {
   document.getElementById('confirmModalOverlay').style.display = 'none';
@@ -2337,11 +2382,12 @@ function confirmModalYes_() {
       function addPermUser_() { openAddPermUserModal_(); }
 
       function deletePermUser_(msnv) {
-        if (!confirm('Xóa tài khoản ' + msnv + '?')) return;
-        google.script.run
-          .withSuccessHandler(function() { loadPermUsers_(true); showToast('Đã xóa tài khoản.', 'success'); })
-          .withFailureHandler(function(err) { showToast('Lỗi: ' + err.message, 'error'); })
-          .deleteUserAccount(msnv);
+        openConfirmModal_('Xóa tài khoản ' + msnv + '?', 'Tài khoản sẽ bị xóa khỏi hệ thống và không thể khôi phục.', function() {
+          google.script.run
+            .withSuccessHandler(function() { loadPermUsers_(true); showToast('Đã xóa tài khoản.', 'success'); })
+            .withFailureHandler(function(err) { showToast('Lỗi: ' + err.message, 'error'); })
+            .deleteUserAccount(msnv);
+        }, { okText: 'Xóa tài khoản' });
       }
       // ====== HẾT PHẦN PHÂN QUYỀN ======
 
@@ -2943,20 +2989,15 @@ function confirmModalYes_() {
       ];
 
       function renderCategoryButtons() {
-        const buildBtn = function(cat, sideVariant) {
-          const textColor = cat.dark ? '#333' : '#fff';
-          const cls = sideVariant ? 'cat-btn cat-btn-side' : 'cat-btn';
-          return '<button type="button" class="' + cls + '" data-cat="' + cat.code +
-            '" style="background:' + cat.color + ';color:' + textColor + ';" ' +
-            'onclick="searchByCategory(\'' + cat.code + '\', this); switchTab(\'tab-checkdon\');">' + cat.code + '</button>';
-        };
-        // Bản dọc trong sidebar (desktop) - tự co gọn khi sidebar thu nhỏ (xem CSS .sidebar.collapsed)
-        document.getElementById('sidebarCategoryButtons').innerHTML =
-          CATEGORIES.map(function(cat) { return buildBtn(cat, true); }).join('');
-        // Bản ngang cho mobile (sidebar bị ẩn hoàn toàn trên mobile - xem media query)
-        document.getElementById('mobileCategoryButtons').innerHTML =
-          CATEGORIES.map(function(cat) { return buildBtn(cat, false); }).join('');
-      }
+  const buildBtn = function(cat) {
+    const textColor = cat.dark ? '#333' : '#fff';
+    return '<button type="button" class="cat-btn" data-cat="' + cat.code +
+      '" style="background:' + cat.color + ';color:' + textColor + ';" ' +
+      'onclick="searchByCategory(\'' + cat.code + '\', this); switchTab(\'tab-checkdon\');">' + cat.code + '</button>';
+  };
+  // Chỉ còn bản ngang cho mobile. Muốn bỏ luôn thì xóa dòng dưới và div#mobileCategoryButtons trong HTML.
+  document.getElementById('mobileCategoryButtons').innerHTML = CATEGORIES.map(buildBtn).join('');
+}
 
       function toggleSidebarCategoryList_() {
         const list = document.getElementById('sidebarCategoryButtons');
@@ -10569,21 +10610,19 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       </div>
     </div>
 
-    <div id="confirmModalOverlay" class="colvis-overlay" style="display:none; z-index:500;">
-  <div class="colvis-modal" style="width:360px; border-radius:14px; text-align:center; padding:0;">
-    <div style="padding:28px 24px 20px 24px;">
-      <div style="width:52px; height:52px; border-radius:50%; background:#fdecea; color:#c62828; font-size:22px; display:flex; align-items:center; justify-content:center; margin:0 auto 14px auto;">
-        <i class="fa-solid fa-trash"></i>
+        <div id="confirmModalOverlay" class="pm-overlay" style="display:none;">
+      <div class="pm-modal" style="width:400px;">
+        <div class="pm-head">
+          <div id="confirmModalIcon" class="pm-icon danger"><i class="fa-solid fa-trash"></i></div>
+          <div id="confirmModalTitle" class="pm-title"></div>
+          <div id="confirmModalDesc" class="pm-desc"></div>
+        </div>
+        <div class="pm-foot">
+          <button id="confirmModalCancelBtn" type="button" class="pm-btn cancel" onclick="closeConfirmModal_()">Hủy</button>
+          <button id="confirmModalOkBtn" type="button" class="pm-btn danger" onclick="confirmModalYes_()">Xóa</button>
+        </div>
       </div>
-      <div id="confirmModalTitle" style="font-size:16px; font-weight:800; color:#222; margin-bottom:6px;"></div>
-      <div id="confirmModalDesc" style="font-size:13px; color:#888; line-height:1.5;"></div>
     </div>
-    <div class="upbom-footer" style="justify-content:center;">
-      <button type="button" class="upbom-cancel" onclick="closeConfirmModal_()">Hủy</button>
-      <button type="button" onclick="confirmModalYes_()" style="background:#c62828; color:#fff; font-weight:bold; border:none; border-radius:4px; padding:8px 22px; cursor:pointer;">Xóa</button>
-    </div>
-  </div>
-</div>
 
     <div id="trackingOverlay" class="colvis-overlay" style="display:none;">
     <div class="colvis-modal" style="width:420px; max-height:90vh;">
@@ -10707,7 +10746,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     </div>
   </div>
 
-      <!-- ===== TRANG QUẢN TRỊ BOM (full màn hình): Up BOM + Xóa BOM ===== -->
+          <!-- ===== TRANG QUẢN TRỊ BOM (full màn hình): Up BOM + Xóa BOM ===== -->
     <div id="admBomOverlay" class="adm-page" style="display:none;">
       <div class="adm-page-top">
         <div class="adm-page-title"><i class="fa-solid fa-database"></i>Quản trị BOM</div>
@@ -10723,9 +10762,10 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       <!-- ===== XÓA BOM ===== -->
       <div id="admPane-xoa" class="adm-pane">
         <div class="adm-pane-head">
+          <div id="admBomCatChips" class="category-buttons" style="margin:0 0 10px 0;"></div>
           <div class="search-row">
             <div class="search-input-wrap">
-              <input type="text" id="admBomSearchInput" placeholder="Nhập/dán LSX (nhiều LSX cách nhau bởi dấu phẩy, xuống dòng...)" autocomplete="off"
+              <input type="text" id="admBomSearchInput" placeholder="Nhập/dán LSX, hoặc gõ loại đơn (BUS, GHE, KDN...) để lấy toàn bộ đơn bắt đầu bằng chữ đó" autocomplete="off"
                 onkeydown="if(event.key==='Enter'){event.preventDefault(); admBomSearch_();}" />
             </div>
             <button type="button" id="admBomSearchBtn" onclick="admBomSearch_()">Tìm</button>
@@ -10735,7 +10775,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         </div>
         <div id="admBomTableWrap" class="tracking-table-wrap" style="flex:1; padding:0 16px 8px 16px;"></div>
         <div class="adm-pane-foot">
-          <div style="font-size:12px; color:#888;">Bấm dòng để chọn · giữ <b>Shift</b> để chọn cả dải · tối đa 300 dòng mỗi lần xóa.</div>
+          <div style="font-size:12px; color:#888;">Bấm hoặc <b>kéo chuột</b> qua các dòng để chọn hàng loạt · giữ <b>Shift</b> để chọn cả dải · tối đa 300 dòng mỗi lần xóa.</div>
           <button type="button" id="admBomDeleteBtn" class="adm-danger-btn" disabled onclick="admBomOpenChoice_()">
             <i class="fa-solid fa-trash-can"></i><span id="admBomDeleteBtnLabel">Xóa đã chọn (0)</span>
           </button>
@@ -10749,18 +10789,44 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           <button type="button" class="quick-btn" onclick="admUpDeleteRows_()"><i class="fa-solid fa-minus"></i> Xóa dòng đã chọn</button>
           <button type="button" class="quick-btn" onclick="admUpClearAll_()"><i class="fa-solid fa-eraser"></i> Xóa trắng bảng</button>
           <button type="button" class="quick-btn" onclick="admUpDoUndo_()"><i class="fa-solid fa-rotate-left"></i> Hoàn tác</button>
+          <span class="adm-date-box"><i class="fa-regular fa-calendar"></i>Ngày GC
+            <input type="date" id="admUpNgayGc" onchange="admUpOnDateChange_('gc')" /></span>
+          <span class="adm-date-box"><i class="fa-regular fa-calendar-check"></i>KHGH
+            <input type="date" id="admUpKhgh" onchange="admUpOnDateChange_('khgh')" /></span>
+          <span id="admUpReadonlyNote" style="display:none; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#b45309;">
+            <i class="fa-solid fa-eye"></i>Bạn chỉ có quyền xem</span>
           <div id="admUpInfo" style="font-size:12px; color:#888; margin-left:6px;"></div>
         </div>
         <div style="padding:0 16px 6px 16px; font-size:12px; color:#888;">
-          Bấm ô rồi <b>Ctrl+V</b> để dán dữ liệu copy từ Sheet. Thứ tự cột = <b>A:AF</b> của sheet "BOM GIAO VIỆC" (copy từ cột C thì bấm ô <b>KHGH</b> rồi dán).
-          Gõ trực tiếp để sửa · Enter/F2/double-click: sửa ô · Delete: xóa nội dung · Ctrl+C/X/Z · Shift+mũi tên: chọn vùng · LSX-STT tự tính từ LSX + STT CT.
+          Bấm ô rồi <b>Ctrl+V</b> để dán dữ liệu copy từ Sheet (thứ tự cột = <b>A:AF</b> của sheet "BOM GIAO VIỆC"; copy từ cột C thì bấm ô <b>KHGH</b> rồi dán).
+          Chọn <b>Ngày GC / KHGH</b> ở trên để tự điền cả cột · <b>Ctrl+D</b>: điền xuống như Excel · Enter/F2/double-click: sửa ô · Delete: xóa nội dung · Ctrl+C/X/Z · Shift+mũi tên: chọn vùng.
+          Cột <b>LSX-STT</b> tự động tính từ LSX + STT CT.
         </div>
         <div id="admUpTableWrap" class="tracking-table-wrap" style="flex:1; padding:0 16px 8px 16px;"></div>
         <div class="adm-pane-foot">
-          <div style="font-size:12px; color:#888;">Dòng trùng LSX-STT đã có trên Supabase sẽ được ghi đè. Tối đa 500 dòng mỗi lần lưu.</div>
+          <div style="font-size:12px; color:#888;">Dòng trùng LSX-STT đã có sẽ được ghi đè (VT/GH/NMK để trống thì giữ nguyên giá trị cũ). Tối đa 500 dòng mỗi lần lưu.</div>
           <button type="button" id="admUpSaveBtn" class="adm-danger-btn" style="background:#1e7e34;" onclick="admUpSave_()">
-            <i class="fa-solid fa-cloud-arrow-up"></i><span>Lưu lên Supabase</span>
+            <i class="fa-solid fa-cloud-arrow-up"></i><span>Lưu...</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Modal chọn nơi lưu/xóa (dùng chung cho Up BOM và Xóa BOM) ===== -->
+    <div id="admChoiceOverlay" class="pm-overlay" style="display:none;" data-tone="danger" onclick="if(event.target===this) closeAdmChoice_()">
+      <div class="pm-modal" style="width:520px;">
+        <div class="pm-head">
+          <div id="admChoiceIcon" class="pm-icon danger"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div id="admChoiceTitle" class="pm-title"></div>
+          <div id="admChoiceLead" class="pm-desc"></div>
+        </div>
+        <div class="pm-body">
+          <div id="admChoicePreview" style="font-size:12px; color:#888; background:rgba(128,128,128,0.1); border-radius:8px; padding:8px 10px; line-height:1.6; word-break:break-word;"></div>
+          <div id="admChoiceOpts" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        <div class="pm-foot">
+          <button type="button" class="pm-btn cancel" onclick="closeAdmChoice_()">Hủy</button>
+          <button type="button" id="admChoiceConfirmBtn" class="pm-btn danger" disabled onclick="admChoiceConfirm_()">Chọn nơi xóa</button>
         </div>
       </div>
     </div>
@@ -10871,7 +10937,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   </div>
 
     <script>
-  /* ================= QUẢN TRỊ BOM: XÓA + UP (chỉ Super Admin) ================= */
+    /* ================= QUẢN TRỊ BOM: UP + XÓA ================= */
   const ADM_BOM_MAX_DELETE_ = 300;
   const ADM_UP_MAX_ROWS_ = 500;
   // Thứ tự = cột A:AF của sheet BOM GIAO VIỆC
@@ -10888,45 +10954,167 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     { key: 'lsx_stt', label: 'LSX-STT' }, { key: 'nhan_vat_tu', label: 'VT' }, { key: 'giao_hang', label: 'GH' },
     { key: 'nmk', label: 'NMK' }, { key: 'ghi_chu', label: 'Ghi chú' }
   ];
+  const ADM_UP_I_ = {};
+  ADM_UP_COLS_.forEach(function(c, i) { ADM_UP_I_[c.key] = i; });
+  const ADM_UP_AUTO_COLS_ = [ADM_UP_I_.ngay_gc, ADM_UP_I_.khgh, ADM_UP_I_.lsx_stt]; // 3 cột tự điền, không tính là "có dữ liệu"
 
-  let admMode_ = 'xoa';
+  let admMode_ = 'up';
   function admEl_(id) { return document.getElementById(id); }
   function admPageOpen_() { const p = admEl_('admBomOverlay'); return !!p && p.style.display !== 'none'; }
+  function admModalOpen_() {
+    return ['confirmModalOverlay', 'admChoiceOverlay'].some(function(id) {
+      const el = admEl_(id); return el && el.style.display !== 'none' && el.style.display !== '';
+    });
+  }
+
+  /** Phân quyền chặt: tab chưa được tạo trong bảng phân quyền thì chỉ Super Admin được dùng. */
+  function hasPermStrict_(tab, type) {
+    if (isPermAdmin_) return true;
+    if (!currentUser_ || !currentUser_.perms || !currentUser_.perms[tab]) return false;
+    return !!currentUser_.perms[tab][type];
+  }
+  function admUpCanEdit_() { return hasPermStrict_('upbom', 'edit'); }
+  function admUpGuard_() {
+    if (admUpCanEdit_()) return true;
+    showToast('Bạn chỉ có quyền xem Up BOM, không có quyền chỉnh sửa/lưu.', 'info');
+    return false;
+  }
 
   function openAdminBomPage_(mode) {
-    if (!isPermAdmin_) { showToast('Chỉ Super Admin mới được dùng chức năng này.', 'error'); return; }
+    mode = mode || 'up';
+    if (mode === 'xoa' && !isPermAdmin_) { showToast('Chỉ Super Admin mới được dùng chức năng Xóa BOM.', 'error'); return; }
+    if (mode === 'up' && !hasPermStrict_('upbom', 'view')) { showToast('Bạn chưa được cấp quyền xem Up BOM.', 'error'); return; }
     closeChangePasswordModal_();
     admEl_('admBomOverlay').style.display = 'flex';
-    admSwitchMode_(mode || 'xoa');
+    admSwitchMode_(mode);
   }
   function openAdminBomModal_() { openAdminBomPage_('xoa'); } // nút "Xóa BOM" trong modal Tài khoản
 
-  function closeAdminBomModal_() {
+  function admRequestClose_(then) {
     if (admBomBusy_ || admUpSaving_) return;
     if (admUpEditing_) admUpCommit_();
-    admEl_('admBomChoiceOverlay').style.display = 'none';
-    admEl_('admBomOverlay').style.display = 'none';
+    function doClose() {
+      admEl_('admChoiceOverlay').style.display = 'none';
+      admEl_('admBomOverlay').style.display = 'none';
+      if (then) then();
+    }
+    if (admUpDirty_()) {
+      openConfirmModal_('Đóng trang Quản trị BOM?', 'Dữ liệu trong bảng Up BOM chưa lưu sẽ bị mất.', doClose,
+        { tone: 'warning', icon: 'fa-triangle-exclamation', okText: 'Đóng, không lưu' });
+    } else doClose();
   }
-  function admGoHome_() { closeAdminBomModal_(); if (!admPageOpen_()) showHomeMenu_(); }
+  function closeAdminBomModal_() { admRequestClose_(); }
+  function admGoHome_() { admRequestClose_(showHomeMenu_); }
 
   function admSwitchMode_(mode) {
+    if (mode === 'xoa' && !isPermAdmin_) { showToast('Chỉ Super Admin mới được dùng chức năng Xóa BOM.', 'error'); mode = 'up'; }
     admMode_ = mode;
+    admEl_('admTabBtn-xoa').style.display = isPermAdmin_ ? '' : 'none';
     ['up', 'xoa'].forEach(function(m) {
       admEl_('admTabBtn-' + m).classList.toggle('active', m === mode);
       admEl_('admPane-' + m).classList.toggle('active', m === mode);
     });
     if (mode === 'up') admUpInit_();
-    else setTimeout(function() { admEl_('admBomSearchInput').focus(); }, 60);
+    else { admBomRenderChips_(); setTimeout(function() { admEl_('admBomSearchInput').focus(); }, 60); }
+  }
+
+  /* ---------------- MODAL CHỌN NƠI LƯU/XÓA (dùng chung) ---------------- */
+  let admChoiceMode_ = 'del', admChoiceVal_ = '', admChoiceCount_ = 0;
+  const ADM_CHOICE_CFG_ = {
+    del: {
+      tone: 'danger', icon: 'fa-triangle-exclamation', title: 'Xác nhận xóa', btnTone: 'danger', preset: '',
+      lead: function(n) { return 'Bạn sắp xóa <b style="color:#c62828;">' + n + '</b> dòng BOM. Chọn nơi cần xóa:'; },
+      idle: 'Chọn nơi xóa', verb: 'xóa',
+      opts: {
+        supabase: { icon: 'fa-database', bg: '#e6f4ea', fg: '#1e7e34', title: 'Chỉ xóa trên Supabase', short: 'Supabase',
+          desc: 'Xóa khỏi dữ liệu của app. Nếu dòng vẫn còn trên Sheet, lần đồng bộ sau sẽ đưa lại.' },
+        sheet: { icon: 'fa-table', bg: '#e8f0fe', fg: '#1a56c4', title: 'Chỉ xóa ở Google Sheet', short: 'Google Sheet',
+          desc: 'Xóa hẳn hàng trên sheet "BOM GIAO VIỆC" (các hàng bên dưới dồn lên). Supabase vẫn giữ dòng này.' },
+        both: { icon: 'fa-trash-can', bg: '#fdecea', fg: '#c62828', title: 'Xóa cả 2 nơi (Supabase + Sheet)', short: 'cả 2 nơi',
+          desc: 'Xóa sạch hoàn toàn, không bị đồng bộ lại. Thao tác không thể hoàn tác.' }
+      }
+    },
+    up: {
+      tone: 'success', icon: 'fa-cloud-arrow-up', title: 'Xác nhận lưu BOM', btnTone: 'success', preset: 'both',
+      lead: function(n) { return 'Bạn sắp lưu <b style="color:#1e7e34;">' + n + '</b> dòng BOM. Chọn nơi cần lưu:'; },
+      idle: 'Chọn nơi lưu', verb: 'lưu',
+      opts: {
+        supabase: { icon: 'fa-database', bg: '#e6f4ea', fg: '#1e7e34', title: 'Chỉ lưu vào Supabase', short: 'Supabase',
+          desc: 'Dữ liệu hiện ngay trên app. Sheet "BOM GIAO VIỆC" chưa được ghi.' },
+        sheet: { icon: 'fa-table', bg: '#e8f0fe', fg: '#1a56c4', title: 'Chỉ lưu vào Google Sheet', short: 'Google Sheet',
+          desc: 'Ghi vào sheet "BOM GIAO VIỆC" (dòng mới nối ở cuối). Lên app sau lần đồng bộ kế tiếp.' },
+        both: { icon: 'fa-layer-group', bg: '#fff4e0', fg: '#b45309', title: 'Lưu cả 2 nơi (Supabase + Sheet) — khuyến nghị', short: 'cả 2 nơi',
+          desc: 'Ghi vào sheet "BOM GIAO VIỆC" và Supabase cùng lúc, luôn khớp nhau.' }
+      }
+    }
+  };
+
+  function admOpenChoice_(mode, count, keys) {
+    const cfg = ADM_CHOICE_CFG_[mode];
+    admChoiceMode_ = mode; admChoiceVal_ = ''; admChoiceCount_ = count;
+    const ov = admEl_('admChoiceOverlay');
+    ov.setAttribute('data-tone', cfg.tone);
+    admEl_('admChoiceIcon').className = 'pm-icon ' + cfg.tone;
+    admEl_('admChoiceIcon').innerHTML = '<i class="fa-solid ' + cfg.icon + '"></i>';
+    admEl_('admChoiceTitle').textContent = cfg.title;
+    admEl_('admChoiceLead').innerHTML = cfg.lead(count);
+    admEl_('admChoicePreview').innerHTML = keys.slice(0, 5).map(escapeHtml_).join('<br>') + (keys.length > 5 ? '<br>... và ' + (keys.length - 5) + ' dòng khác' : '');
+    admEl_('admChoiceOpts').innerHTML = ['supabase', 'sheet', 'both'].map(function(k) {
+      const o = cfg.opts[k];
+      return '<div class="adm-choice" data-choice="' + k + '" onclick="admPickChoice_(\'' + k + '\')">' +
+        '<div class="adm-choice-icon" style="background:' + o.bg + ';color:' + o.fg + ';"><i class="fa-solid ' + o.icon + '"></i></div>' +
+        '<div><div class="adm-choice-title">' + o.title + '</div><div class="adm-choice-desc">' + o.desc + '</div></div></div>';
+    }).join('');
+    const btn = admEl_('admChoiceConfirmBtn');
+    btn.className = 'pm-btn ' + cfg.btnTone;
+    btn.disabled = true; btn.textContent = cfg.idle;
+    ov.style.display = 'flex';
+    if (cfg.preset) admPickChoice_(cfg.preset);
+  }
+  function closeAdmChoice_() {
+    if (admBomBusy_ || admUpSaving_) return;
+    admEl_('admChoiceOverlay').style.display = 'none';
+  }
+  function admPickChoice_(val) {
+    admChoiceVal_ = val;
+    const cfg = ADM_CHOICE_CFG_[admChoiceMode_];
+    document.querySelectorAll('#admChoiceOpts .adm-choice').forEach(function(el) { el.classList.toggle('selected', el.getAttribute('data-choice') === val); });
+    const btn = admEl_('admChoiceConfirmBtn');
+    btn.disabled = false;
+    btn.textContent = 'Xác nhận ' + cfg.verb + ' ' + admChoiceCount_ + ' dòng (' + cfg.opts[val].short + ')';
+  }
+  function admChoiceConfirm_() {
+    if (!admChoiceVal_) return;
+    if (admChoiceMode_ === 'del') admBomConfirmDelete_(); else admUpConfirmSave_();
   }
 
   /* ---------------- XÓA BOM ---------------- */
-  let admBomRows_ = [], admBomSel_ = new Set(), admBomLastIdx_ = -1, admBomChoice_ = '', admBomBusy_ = false, admBomReqId_ = 0;
+  let admBomRows_ = [], admBomSel_ = new Set(), admBomLastIdx_ = -1, admBomBusy_ = false, admBomReqId_ = 0;
 
   function admBomVisibleCols_() { return COLUMNS.filter(function(c) { return isGenericColVisible_('admbom', c.key); }); }
 
+  function admBomRenderChips_() {
+    const el = admEl_('admBomCatChips');
+    if (!el || el.children.length) return;
+    el.innerHTML = CATEGORIES.map(function(c) {
+      return '<button type="button" class="cat-btn" data-cat="' + c.code + '" style="background:' + c.color + ';color:' + (c.dark ? '#333' : '#fff') + ';" ' +
+        'onclick="admBomPickCategory_(\'' + c.code + '\')">' + c.code + '</button>';
+    }).join('');
+  }
+  function admBomPickCategory_(code) {
+    admEl_('admBomSearchInput').value = code;
+    admBomSearch_();
+  }
+
   function admBomSearch_() {
-    const tokens = admEl_('admBomSearchInput').value.split(/[,;\s]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length >= 3; });
-    if (tokens.length === 0) { showToast('Vui lòng nhập LSX (tối thiểu 3 ký tự, nhớ dấu "/").', 'error'); return; }
+    const raw = admEl_('admBomSearchInput').value;
+    // Từ khóa 3 ký tự trở lên, hoặc 2 chữ cái (VD "ID")
+    const tokens = raw.split(/[,;\s]+/).map(function(s) { return s.trim(); })
+      .filter(function(s) { return s.length >= 3 || /^[A-Za-z]{2}$/.test(s); });
+    if (tokens.length === 0) { showToast('Vui lòng nhập LSX (nhớ dấu "/") hoặc chọn loại đơn (BUS, GHE...).', 'error'); return; }
+    const onlyCat = tokens.length === 1 && /^[A-Za-z]{2,8}\.?$/.test(tokens[0]) ? tokens[0].replace(/\.$/, '').toUpperCase() : '';
+    document.querySelectorAll('#admBomCatChips .cat-btn').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-cat') === onlyCat); });
+
     const myId = ++admBomReqId_;
     const btn = admEl_('admBomSearchBtn');
     btn.disabled = true;
@@ -10939,7 +11127,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         admBomSel_ = new Set(); admBomLastIdx_ = -1;
         admEl_('admBomStatus').textContent = (res && res.truncated)
           ? 'Có ' + res.total + ' dòng, chỉ hiển thị ' + admBomRows_.length + ' dòng đầu — hãy nhập LSX cụ thể hơn.'
-          : 'Tìm thấy ' + admBomRows_.length + ' dòng.';
+          : 'Tìm thấy ' + admBomRows_.length + ' dòng' + (onlyCat ? ' có LSX bắt đầu bằng "' + onlyCat + '."' : '.');
         admBomRender_();
       })
       .withFailureHandler(function(err) {
@@ -10956,10 +11144,10 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     let html = '<table><tr><th style="width:36px;"><input type="checkbox" id="admBomCheckAll" onchange="admBomToggleAll_(this.checked)" /></th>' +
       cols.map(function(c) { return '<th>' + escapeHtml_(c.label) + '</th>'; }).join('') + '</tr>';
     if (admBomRows_.length === 0) {
-      html += '<tr><td colspan="' + (cols.length + 1) + '" class="empty-state-cell">Nhập LSX và bấm Tìm để hiển thị dữ liệu cần xóa.</td></tr>';
+      html += '<tr><td colspan="' + (cols.length + 1) + '" class="empty-state-cell">Nhập LSX hoặc bấm loại đơn (BUS, GHE...) rồi Tìm để hiển thị dữ liệu cần xóa.</td></tr>';
     } else {
       admBomRows_.forEach(function(r, i) {
-        html += '<tr data-i="' + i + '" onclick="admBomRowClick_(event,' + i + ')"><td><input type="checkbox" /></td>';
+        html += '<tr data-i="' + i + '"><td><input type="checkbox" /></td>';
         cols.forEach(function(c) {
           const v = r[c.key];
           const cell = c.bool ? (v ? '&#10003;' : '') : (c.key === 'khgh' ? escapeHtml_(formatDate(v)) : ((v === null || v === undefined) ? '' : escapeHtml_(String(v))));
@@ -10972,15 +11160,66 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     admBomUpdateUI_();
   }
 
-  function admBomRowClick_(e, i) {
-    const key = admBomRows_[i].lsx_stt;
-    if (e.shiftKey && admBomLastIdx_ >= 0) {
-      const a = Math.min(admBomLastIdx_, i), b = Math.max(admBomLastIdx_, i);
-      for (let k = a; k <= b; k++) admBomSel_.add(admBomRows_[k].lsx_stt);
-    } else if (admBomSel_.has(key)) admBomSel_.delete(key); else admBomSel_.add(key);
-    admBomLastIdx_ = i;
+  /* --- Kéo chuột để chọn hàng loạt --- */
+  let admBomDragging_ = false, admBomDragAnchor_ = -1, admBomDragMode_ = true, admBomDragBase_ = null;
+  let admBomDragX_ = 0, admBomDragY_ = 0, admBomAutoTimer_ = null;
+
+  function admBomApplyDrag_(cur) {
+    admBomSel_ = new Set(admBomDragBase_);
+    const a = Math.min(admBomDragAnchor_, cur), b = Math.max(admBomDragAnchor_, cur);
+    for (let k = a; k <= b; k++) {
+      const key = admBomRows_[k] && admBomRows_[k].lsx_stt;
+      if (!key) continue;
+      if (admBomDragMode_) admBomSel_.add(key); else admBomSel_.delete(key);
+    }
     admBomUpdateUI_();
   }
+  function admBomAutoScrollTick_() {
+    if (!admBomDragging_) return;
+    const wrap = admEl_('admBomTableWrap'), r = wrap.getBoundingClientRect();
+    if (admBomDragY_ > r.bottom - 36) wrap.scrollTop += 22;
+    else if (admBomDragY_ < r.top + 56) wrap.scrollTop -= 22;
+    else return;
+    const y = Math.max(r.top + 60, Math.min(admBomDragY_, r.bottom - 6));
+    const el = document.elementFromPoint(admBomDragX_, y);
+    const tr = el && el.closest ? el.closest('tr[data-i]') : null;
+    if (tr) admBomApplyDrag_(+tr.dataset.i);
+  }
+  function admBomStopDrag_() {
+    admBomDragging_ = false;
+    if (admBomAutoTimer_) { clearInterval(admBomAutoTimer_); admBomAutoTimer_ = null; }
+  }
+  (function bindAdmBomDrag_() {
+    const wrap = admEl_('admBomTableWrap');
+    wrap.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      const tr = e.target.closest('tr[data-i]');
+      if (!tr) return;
+      const i = +tr.dataset.i;
+      if (e.shiftKey && admBomLastIdx_ >= 0) { // Shift: chọn cả dải từ dòng bấm trước
+        const a = Math.min(admBomLastIdx_, i), b = Math.max(admBomLastIdx_, i);
+        for (let k = a; k <= b; k++) admBomSel_.add(admBomRows_[k].lsx_stt);
+        admBomUpdateUI_(); e.preventDefault(); return;
+      }
+      admBomDragging_ = true;
+      admBomDragAnchor_ = i;
+      admBomDragBase_ = new Set(admBomSel_);
+      admBomDragMode_ = !admBomSel_.has(admBomRows_[i].lsx_stt); // bấm dòng chưa chọn -> chế độ chọn; dòng đã chọn -> chế độ bỏ chọn
+      admBomDragX_ = e.clientX; admBomDragY_ = e.clientY;
+      admBomLastIdx_ = i;
+      admBomApplyDrag_(i);
+      if (!admBomAutoTimer_) admBomAutoTimer_ = setInterval(admBomAutoScrollTick_, 40);
+      e.preventDefault();
+    });
+    wrap.addEventListener('mouseover', function(e) {
+      if (!admBomDragging_) return;
+      const tr = e.target.closest('tr[data-i]');
+      if (tr) admBomApplyDrag_(+tr.dataset.i);
+    });
+    document.addEventListener('mousemove', function(e) { if (admBomDragging_) { admBomDragX_ = e.clientX; admBomDragY_ = e.clientY; } });
+    document.addEventListener('mouseup', admBomStopDrag_);
+  })();
+
   function admBomToggleAll_(checked) {
     admBomRows_.forEach(function(r) { if (checked) admBomSel_.add(r.lsx_stt); else admBomSel_.delete(r.lsx_stt); });
     admBomUpdateUI_();
@@ -11003,33 +11242,18 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     const n = admBomSel_.size;
     if (n === 0) return;
     if (n > ADM_BOM_MAX_DELETE_) { showToast('Mỗi lần chỉ xóa tối đa ' + ADM_BOM_MAX_DELETE_ + ' dòng. Hiện đang chọn ' + n + ' dòng.', 'error'); return; }
-    admBomChoice_ = '';
-    document.querySelectorAll('.adm-choice').forEach(function(el) { el.classList.remove('selected'); });
-    admEl_('admBomChoiceCount').textContent = n;
-    const keys = Array.from(admBomSel_);
-    admEl_('admBomChoicePreview').innerHTML = keys.slice(0, 5).map(escapeHtml_).join('<br>') + (keys.length > 5 ? '<br>... và ' + (keys.length - 5) + ' dòng khác' : '');
-    const btn = admEl_('admBomConfirmBtn');
-    btn.disabled = true; btn.textContent = 'Chọn nơi xóa';
-    admEl_('admBomChoiceOverlay').style.display = 'flex';
-  }
-  function closeAdminBomChoice_() { if (!admBomBusy_) admEl_('admBomChoiceOverlay').style.display = 'none'; }
-  function admBomPickChoice_(val) {
-    admBomChoice_ = val;
-    document.querySelectorAll('.adm-choice').forEach(function(el) { el.classList.toggle('selected', el.getAttribute('data-choice') === val); });
-    const btn = admEl_('admBomConfirmBtn');
-    btn.disabled = false;
-    btn.textContent = 'Xác nhận xóa ' + admBomSel_.size + ' dòng (' + { supabase: 'Supabase', sheet: 'Google Sheet', both: 'cả 2 nơi' }[val] + ')';
+    admOpenChoice_('del', n, Array.from(admBomSel_));
   }
 
   function admBomConfirmDelete_() {
-    if (admBomBusy_ || !admBomChoice_) return;
-    const target = admBomChoice_;
+    if (admBomBusy_ || !admChoiceVal_) return;
+    const target = admChoiceVal_;
     const items = admBomRows_.filter(function(r) { return admBomSel_.has(r.lsx_stt); })
       .map(function(r) { return { lsx_stt: r.lsx_stt, thu_tu: r.thu_tu }; });
     if (items.length === 0) return;
 
     admBomBusy_ = true;
-    const btn = admEl_('admBomConfirmBtn');
+    const btn = admEl_('admChoiceConfirmBtn');
     const oldLabel = btn.textContent;
     btn.disabled = true;
     btn.innerHTML = '<span class="btn-spinner"></span>Đang xóa...';
@@ -11038,7 +11262,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     google.script.run
       .withSuccessHandler(function(res) {
         finish_();
-        admEl_('admBomChoiceOverlay').style.display = 'none';
+        admEl_('admChoiceOverlay').style.display = 'none';
         if (target !== 'sheet') {
           const gone = new Set(items.map(function(it) { return it.lsx_stt; }));
           admBomRows_ = admBomRows_.filter(function(r) { return !gone.has(r.lsx_stt); });
@@ -11059,16 +11283,58 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   /* ---------------- UP BOM: lưới kiểu Google Sheet ---------------- */
   let admUpRows_ = [], admUpCells_ = [], admUpPainted_ = [], admUpUndo_ = [];
   let admUpSel_ = null, admUpAnc_ = null, admUpAct_ = null;
-  let admUpDragging_ = false, admUpEditing_ = null, admUpSaving_ = false;
+  let admUpDragging_ = false, admUpEditing_ = null, admUpSaving_ = false, admUpPending_ = null;
+  let admUpNgayGc_ = '', admUpKhgh_ = ''; // ngày đã chọn ở 2 ô date, dạng dd/mm/yy
 
   function admUpEmptyRow_() { return ADM_UP_COLS_.map(function() { return ''; }); }
-  function admUpInit_() {
-    if (admUpRows_.length) return;
-    for (let i = 0; i < 30; i++) admUpRows_.push(admUpEmptyRow_());
+  function admUpRowHasData_(row) {
+    return row.some(function(v, i) { return ADM_UP_AUTO_COLS_.indexOf(i) === -1 && String(v).trim() !== ''; });
+  }
+  function admUpDirty_() { return admUpRows_.some(admUpRowHasData_); }
+
+  /** LSX-STT = LSX + "-" + STT CT, tự tính. */
+  function admUpSyncKey_(row) {
+    const l = String(row[ADM_UP_I_.lsx]).trim(), s = String(row[ADM_UP_I_.stt_ct]).trim();
+    row[ADM_UP_I_.lsx_stt] = (l && s) ? (l + '-' + s) : '';
+  }
+  /** Dòng có dữ liệu mà ô Ngày GC / KHGH còn trống -> điền theo ngày đang chọn. */
+  function admUpApplyDates_(row) {
+    if (!admUpRowHasData_(row)) return;
+    if (admUpNgayGc_ && !String(row[ADM_UP_I_.ngay_gc]).trim()) row[ADM_UP_I_.ngay_gc] = admUpNgayGc_;
+    if (admUpKhgh_ && !String(row[ADM_UP_I_.khgh]).trim()) row[ADM_UP_I_.khgh] = admUpKhgh_;
+  }
+  function admUpFmtDate_(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    return m ? (m[3] + '/' + m[2] + '/' + m[1].slice(2)) : '';
+  }
+  /** Chọn ngày ở 2 ô date -> điền (ghi đè) cả cột cho mọi dòng có dữ liệu. */
+  function admUpOnDateChange_(which) {
+    const el = admEl_(which === 'gc' ? 'admUpNgayGc' : 'admUpKhgh');
+    if (!admUpGuard_()) { el.value = ''; return; }
+    const val = admUpFmtDate_(el.value);
+    if (which === 'gc') admUpNgayGc_ = val; else admUpKhgh_ = val;
+    const idx = which === 'gc' ? ADM_UP_I_.ngay_gc : ADM_UP_I_.khgh;
+    admUpSnap_();
+    let n = 0;
+    admUpRows_.forEach(function(row) { if (admUpRowHasData_(row)) { row[idx] = val; n++; } });
     admUpRender_();
+    if (val) showToast('Đã điền ' + (which === 'gc' ? 'Ngày GC' : 'KHGH') + ' ' + val + ' cho ' + n + ' dòng.', 'success');
+  }
+
+  function admUpInit_() {
+    if (!admUpRows_.length) for (let i = 0; i < 30; i++) admUpRows_.push(admUpEmptyRow_());
+    admUpRender_();
+    admUpRefreshPermUI_();
+  }
+  function admUpRefreshPermUI_() {
+    const can = admUpCanEdit_();
+    document.querySelectorAll('#admPane-up .adm-up-toolbar button, #admPane-up .adm-up-toolbar input, #admUpSaveBtn')
+      .forEach(function(el) { el.disabled = !can; });
+    admEl_('admUpReadonlyNote').style.display = can ? 'none' : 'inline-flex';
   }
   function admUpSnap_() { admUpUndo_.push(JSON.stringify(admUpRows_)); if (admUpUndo_.length > 30) admUpUndo_.shift(); }
   function admUpDoUndo_() {
+    if (!admUpGuard_()) return;
     if (admUpEditing_) admUpCommit_(true);
     if (!admUpUndo_.length) { showToast('Không còn gì để hoàn tác.', 'info'); return; }
     admUpRows_ = JSON.parse(admUpUndo_.pop());
@@ -11076,13 +11342,19 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   }
 
   function admUpRender_() {
-    let h = '<table id="admUpTable"><tr><th>#</th>' + ADM_UP_COLS_.map(function(c) { return '<th>' + escapeHtml_(c.label) + '</th>'; }).join('') + '</tr>';
+    const wrap = admEl_('admUpTableWrap');
+    const st = wrap.scrollTop, sl = wrap.scrollLeft;
+    admUpRows_.forEach(admUpSyncKey_);
+    let h = '<table id="admUpTable"><tr><th>#</th>' + ADM_UP_COLS_.map(function(c) {
+      return '<th>' + escapeHtml_(c.label) + (c.key === 'lsx_stt' ? ' <i class="fa-solid fa-wand-magic-sparkles" title="Tự động tính từ LSX + STT CT"></i>' : '') + '</th>';
+    }).join('') + '</tr>';
     admUpRows_.forEach(function(row, r) {
       h += '<tr data-r="' + r + '"><td class="adm-up-idx" data-idx="' + r + '">' + (r + 1) + '</td>';
-      row.forEach(function(v, c) { h += '<td data-r="' + r + '" data-c="' + c + '">' + escapeHtml_(v) + '</td>'; });
+      row.forEach(function(v, c) {
+        h += '<td data-r="' + r + '" data-c="' + c + '"' + (c === ADM_UP_I_.lsx_stt ? ' class="adm-up-ro"' : '') + '>' + escapeHtml_(v) + '</td>';
+      });
       h += '</tr>';
     });
-    const wrap = admEl_('admUpTableWrap');
     wrap.innerHTML = h + '</table>';
     admUpCells_ = []; admUpPainted_ = []; admUpEditing_ = null;
     wrap.querySelectorAll('td[data-c]').forEach(function(td) {
@@ -11092,6 +11364,19 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     if (admUpSel_ && (admUpSel_.r1 >= admUpRows_.length)) { admUpSel_ = null; admUpAct_ = null; }
     admUpPaint_();
     admUpUpdateInfo_();
+    wrap.scrollTop = st; wrap.scrollLeft = sl;
+  }
+
+  /** Cập nhật lại 3 ô tự động (Ngày GC, KHGH, LSX-STT) của 1 dòng mà không vẽ lại cả bảng. */
+  function admUpAutoRow_(r, withDates) {
+    const row = admUpRows_[r];
+    if (!row) return;
+    if (withDates) admUpApplyDates_(row);
+    admUpSyncKey_(row);
+    ADM_UP_AUTO_COLS_.forEach(function(c) {
+      const td = admUpCells_[r] && admUpCells_[r][c];
+      if (td) td.textContent = row[c];
+    });
   }
 
   function admUpPaint_() {
@@ -11110,7 +11395,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     }
   }
   function admUpUpdateInfo_() {
-    const filled = admUpRows_.filter(function(row) { return row.some(function(v) { return String(v).trim() !== ''; }); }).length;
+    const filled = admUpRows_.filter(admUpRowHasData_).length;
     const el = admEl_('admUpInfo');
     if (el) el.textContent = filled + ' dòng có dữ liệu / ' + admUpRows_.length + ' dòng (tối đa ' + ADM_UP_MAX_ROWS_ + ')';
   }
@@ -11139,6 +11424,8 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
   /* --- sửa trực tiếp trong ô --- */
   function admUpBeginEdit_(r, c, initial) {
+    if (!admUpGuard_()) return;
+    if (c === ADM_UP_I_.lsx_stt) { showToast('Cột LSX-STT tự động tính từ LSX + STT CT, không cần nhập.', 'info'); return; }
     const td = admUpCells_[r] && admUpCells_[r][c];
     if (!td) return;
     if (admUpEditing_) admUpCommit_();
@@ -11161,12 +11448,18 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     td.contentEditable = 'false';
     td.classList.remove('adm-editing');
     td.textContent = val;
-    if (val !== admUpRows_[r][c]) { admUpSnap_(); admUpRows_[r][c] = val; admUpUpdateInfo_(); }
+    if (val !== admUpRows_[r][c]) {
+      admUpSnap_();
+      admUpRows_[r][c] = val;
+      admUpAutoRow_(r, true);   // tính lại LSX-STT + điền ngày mặc định nếu dòng vừa có dữ liệu
+      admUpUpdateInfo_();
+    }
   }
 
-  /* --- sao chép / dán / xóa --- */
+  /* --- sao chép / dán / xóa / điền xuống --- */
   function admUpCopy_(isCut) {
     if (!admUpSel_) return;
+    if (isCut && !admUpGuard_()) return;
     const b = admUpSel_, lines = [];
     for (let r = b.r1; r <= b.r2; r++) {
       const vals = [];
@@ -11177,18 +11470,36 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     if (isCut) admUpClearSel_(); else showToast('Đã copy ' + ((b.r2 - b.r1 + 1) * (b.c2 - b.c1 + 1)) + ' ô.', 'success');
   }
   function admUpClearSel_() {
-    if (!admUpSel_) return;
+    if (!admUpSel_ || !admUpGuard_()) return;
     admUpSnap_();
     for (let r = admUpSel_.r1; r <= admUpSel_.r2; r++) {
       for (let c = admUpSel_.c1; c <= admUpSel_.c2; c++) {
+        if (c === ADM_UP_I_.lsx_stt) continue;
         admUpRows_[r][c] = '';
         const td = admUpCells_[r] && admUpCells_[r][c];
         if (td) td.textContent = '';
       }
+      admUpAutoRow_(r, false);
     }
     admUpUpdateInfo_();
   }
+  /** Ctrl+D: giống Excel. Chọn 1 dòng -> chép từ dòng trên; chọn nhiều dòng -> chép dòng đầu xuống các dòng dưới. */
+  function admUpFillDown_() {
+    if (!admUpSel_ || !admUpGuard_()) return;
+    const b = admUpSel_;
+    if (b.r1 === b.r2 && b.r1 === 0) { showToast('Dòng đầu tiên không có dòng phía trên để chép.', 'info'); return; }
+    admUpSnap_();
+    if (b.r1 === b.r2) {
+      for (let c = b.c1; c <= b.c2; c++) admUpRows_[b.r1][c] = admUpRows_[b.r1 - 1][c];
+    } else {
+      for (let r = b.r1 + 1; r <= b.r2; r++)
+        for (let c = b.c1; c <= b.c2; c++) admUpRows_[r][c] = admUpRows_[b.r1][c];
+    }
+    admUpRender_();
+    showToast('Đã điền xuống (Ctrl+D).', 'success');
+  }
   function admUpPasteText_(text) {
+    if (!admUpGuard_()) return;
     text = String(text || '').replace(/\r/g, '');
     if (text.slice(-1) === '\n') text = text.slice(0, -1);
     let m = khbusParseTsv_(text);
@@ -11202,10 +11513,12 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     const b = admUpSel_ || { r1: 0, c1: 0, r2: 0, c2: 0 };
     const maxC = ADM_UP_COLS_.length;
     admUpSnap_();
+    let lastR = b.r1;
 
     if (m.length === 1 && m[0].length === 1 && (b.r2 > b.r1 || b.c2 > b.c1)) {
       const v = String(m[0][0]).trim(); // copy 1 ô -> điền cho cả vùng đang chọn
       for (let r = b.r1; r <= b.r2; r++) for (let c = b.c1; c <= b.c2; c++) admUpRows_[r][c] = v;
+      lastR = b.r2;
     } else {
       if (b.r1 + m.length > ADM_UP_MAX_ROWS_) {
         showToast('Chỉ nhận tối đa ' + ADM_UP_MAX_ROWS_ + ' dòng, phần dư đã bị bỏ qua.', 'info');
@@ -11220,14 +11533,17 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           if (c < maxC) admUpRows_[b.r1 + i][c] = String(v === null || v === undefined ? '' : v).trim();
         });
       });
-      admUpSel_ = { r1: b.r1, r2: b.r1 + m.length - 1, c1: b.c1, c2: Math.min(maxC - 1, b.c1 + w - 1) };
+      lastR = b.r1 + m.length - 1;
+      admUpSel_ = { r1: b.r1, r2: lastR, c1: b.c1, c2: Math.min(maxC - 1, b.c1 + w - 1) };
       admUpAnc_ = { r: b.r1, c: b.c1 }; admUpAct_ = { r: b.r1, c: b.c1 };
     }
-    admUpRender_();
+    for (let r = b.r1; r <= lastR; r++) admUpApplyDates_(admUpRows_[r]); // điền ngày đã chọn vào ô còn trống
+    admUpRender_();                                                       // render sẽ tự điền LSX-STT
     showToast('Đã dán dữ liệu.', 'success');
   }
 
   function admUpAddRows_(n) {
+    if (!admUpGuard_()) return;
     const room = ADM_UP_MAX_ROWS_ - admUpRows_.length;
     if (room <= 0) { showToast('Đã đạt tối đa ' + ADM_UP_MAX_ROWS_ + ' dòng.', 'info'); return; }
     admUpSnap_();
@@ -11235,6 +11551,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     admUpRender_();
   }
   function admUpDeleteRows_() {
+    if (!admUpGuard_()) return;
     if (!admUpSel_) { showToast('Hãy chọn ô/dòng cần xóa trước.', 'info'); return; }
     admUpSnap_();
     admUpRows_.splice(admUpSel_.r1, admUpSel_.r2 - admUpSel_.r1 + 1);
@@ -11243,21 +11560,23 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     admUpRender_();
   }
   function admUpClearAll_() {
-    if (!confirm('Xóa trắng toàn bộ bảng? (có thể hoàn tác bằng nút Hoàn tác)')) return;
-    admUpSnap_();
-    admUpRows_ = [];
-    for (let i = 0; i < 30; i++) admUpRows_.push(admUpEmptyRow_());
-    admUpSel_ = null; admUpAct_ = null; admUpAnc_ = null;
-    admUpRender_();
+    if (!admUpGuard_()) return;
+    openConfirmModal_('Xóa trắng toàn bộ bảng?', 'Toàn bộ dữ liệu đang nhập sẽ bị xóa (có thể bấm Hoàn tác để lấy lại).', function() {
+      admUpSnap_();
+      admUpRows_ = [];
+      for (let i = 0; i < 30; i++) admUpRows_.push(admUpEmptyRow_());
+      admUpSel_ = null; admUpAct_ = null; admUpAnc_ = null;
+      admUpRender_();
+    }, { tone: 'warning', icon: 'fa-eraser', okText: 'Xóa trắng' });
   }
 
-  /* --- lưu lên Supabase --- */
+  /* --- lưu: kiểm tra -> chọn nơi lưu -> gửi server --- */
   function admUpSave_() {
-    if (admUpSaving_) return;
+    if (admUpSaving_ || !admUpGuard_()) return;
     if (admUpEditing_) admUpCommit_();
     const payload = [], bad = [];
     admUpRows_.forEach(function(row, r) {
-      if (!row.some(function(v) { return String(v).trim() !== ''; })) return;
+      if (!admUpRowHasData_(row)) return;
       const o = { _line: r + 1 };
       ADM_UP_COLS_.forEach(function(c, i) { o[c.key] = row[i]; });
       if (!String(o.lsx).trim() || !String(o.stt_ct).trim()) bad.push(r);
@@ -11273,25 +11592,39 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       if (tr) tr.scrollIntoView({ block: 'center' });
       return;
     }
-    if (!confirm('Đưa ' + payload.length + ' dòng BOM lên Supabase (bảng bom_giao_viec)?\nDòng trùng LSX-STT đã có sẽ bị ghi đè.')) return;
+    admUpPending_ = payload;
+    admOpenChoice_('up', payload.length, payload.map(function(p) { return p.lsx + '-' + p.stt_ct; }));
+  }
 
+  function admUpConfirmSave_() {
+    if (admUpSaving_ || !admChoiceVal_ || !admUpPending_) return;
+    const target = admChoiceVal_, payload = admUpPending_;
     admUpSaving_ = true;
-    const btn = admEl_('admUpSaveBtn');
-    const oldHtml = btn.innerHTML;
+    const btn = admEl_('admChoiceConfirmBtn');
+    const oldLabel = btn.textContent;
     btn.disabled = true;
     btn.innerHTML = '<span class="btn-spinner"></span>Đang lưu...';
-    function finish_() { admUpSaving_ = false; btn.disabled = false; btn.innerHTML = oldHtml; }
+    function finish_() { admUpSaving_ = false; btn.textContent = oldLabel; btn.disabled = false; }
 
     google.script.run
       .withSuccessHandler(function(res) {
         finish_();
-        showToast('Đã lưu ' + res.saved + ' dòng (thêm mới ' + res.created + ', ghi đè ' + res.updated + ').', 'success');
+        admEl_('admChoiceOverlay').style.display = 'none';
+        const parts = [];
+        if (res.supabase) parts.push('Supabase: thêm ' + res.supabase.created + ', ghi đè ' + res.supabase.updated);
+        if (res.sheet) parts.push('Sheet: thêm ' + res.sheet.added + ', cập nhật ' + res.sheet.updated);
+        if (res.errors && res.errors.length) {
+          showToast('Đã lưu một phần — ' + parts.join(' · ') + '. LỖI: ' + res.errors.join(' | '), 'error');
+          return; // giữ nguyên bảng để người dùng xử lý lại
+        }
+        showToast('Đã lưu ' + payload.length + ' dòng — ' + parts.join(' · '), 'success');
+        admUpPending_ = null;
         admUpRows_ = []; admUpUndo_ = []; admUpSel_ = null; admUpAct_ = null; admUpAnc_ = null;
         for (let i = 0; i < 30; i++) admUpRows_.push(admUpEmptyRow_());
         admUpRender_();
       })
       .withFailureHandler(function(err) { finish_(); showToast('Lỗi lưu BOM: ' + err.message, 'error'); })
-      .adminUpBom(payload);
+      .adminUpBom(payload, target);
   }
 
   /* --- chuột + bàn phím cho lưới --- */
@@ -11332,7 +11665,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   })();
 
   document.addEventListener('keydown', function(e) {
-    if (!admPageOpen_() || admMode_ !== 'up') return;
+    if (!admPageOpen_() || admMode_ !== 'up' || admModalOpen_()) return;
     const t = e.target;
     if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return;
     const k = e.key, ctrl = e.ctrlKey || e.metaKey;
@@ -11351,6 +11684,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     const a = admUpAct_;
     if (ctrl && k.toLowerCase() === 'c') { stop(); admUpCopy_(false); }
     else if (ctrl && k.toLowerCase() === 'x') { stop(); admUpCopy_(true); }
+    else if (ctrl && k.toLowerCase() === 'd') { stop(); admUpFillDown_(); }   // Ctrl+D: điền xuống
     else if (ctrl && k.toLowerCase() === 'v') { e.stopImmediatePropagation(); /* để sự kiện paste xử lý */ }
     else if (k === 'Delete' || k === 'Backspace') { stop(); admUpClearSel_(); }
     else if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'ArrowLeft' || k === 'ArrowRight') {
@@ -11366,7 +11700,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   }, true);
 
   document.addEventListener('paste', function(e) {
-    if (!admPageOpen_() || admMode_ !== 'up') return;
+    if (!admPageOpen_() || admMode_ !== 'up' || admModalOpen_()) return;
     const text = (e.clipboardData || window.clipboardData).getData('text/plain');
     if (admUpEditing_) {
       e.preventDefault(); e.stopImmediatePropagation();
@@ -11380,21 +11714,23 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     admUpPasteText_(text);
   }, true);
 
-  // Esc: đóng modal trên cùng trước (chỉ khi không đang sửa ô)
+  // Esc: đóng modal trên cùng trước (modal xác nhận -> modal chọn nơi lưu -> trang), không khi đang sửa ô
   document.addEventListener('keydown', function(e) {
-    if (e.key !== 'Escape' || admUpEditing_) return;
-    const choice = admEl_('admBomChoiceOverlay');
-    if (choice && choice.style.display !== 'none') { e.stopImmediatePropagation(); closeAdminBomChoice_(); return; }
-    if (admPageOpen_()) { e.stopImmediatePropagation(); closeAdminBomModal_(); }
+    if (e.key !== 'Escape' || admUpEditing_ || !admPageOpen_()) return;
+    const cf = admEl_('confirmModalOverlay');
+    if (cf && cf.style.display !== 'none' && cf.style.display !== '') { e.stopImmediatePropagation(); closeConfirmModal_(); return; }
+    const ch = admEl_('admChoiceOverlay');
+    if (ch && ch.style.display !== 'none' && ch.style.display !== '') { e.stopImmediatePropagation(); closeAdmChoice_(); return; }
+    e.stopImmediatePropagation(); closeAdminBomModal_();
   }, true);
 
-  // Hiện nút "Up BOM" ở Dashboard chỉ cho Super Admin
+  // Nút "Up BOM" ở Dashboard: hiện cho ai có quyền XEM mục "Up BOM" (Super Admin luôn thấy)
   (function patchPerm_() {
     const orig = applyPermissionsToUI_;
     applyPermissionsToUI_ = function() {
       orig.apply(this, arguments);
       const b = document.getElementById('dashUpBomBtn');
-      if (b) b.style.display = isPermAdmin_ ? '' : 'none';
+      if (b) b.style.display = hasPermStrict_('upbom', 'view') ? '' : 'none';
     };
   })();
 
