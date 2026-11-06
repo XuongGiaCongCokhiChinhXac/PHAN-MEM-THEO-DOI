@@ -1313,6 +1313,47 @@
       body.dark-mode .adm-choice-title { color: #eceef0; }
       body.dark-mode .adm-choice-desc { color: #9aa0ab; }
 
+            /* ===== Trang Quản trị BOM (full màn hình) ===== */
+      .adm-page { position: fixed; inset: 0; z-index: 540; background: #f4f6f9; flex-direction: column; }
+      body.dark-mode .adm-page { background: #14171c; }
+      .adm-page-top {
+        display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #003DA5; color: #fff;
+        flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      }
+      body.dark-mode .adm-page-top { background: #0b1220; }
+      .adm-page-title { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-right: 14px; }
+      .adm-page-top .quick-btn.active { background: #fff; color: #003DA5; border-color: #fff; }
+      .adm-pane { display: none; flex: 1; min-height: 0; flex-direction: column; }
+      .adm-pane.active { display: flex; }
+      .adm-pane-head { padding: 12px 16px 0 16px; }
+      .adm-pane-foot {
+        padding: 10px 16px; border-top: 1px solid rgba(128,128,128,0.25); background: #fff;
+        display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+      }
+      body.dark-mode .adm-pane-foot { background: #1c1f26; }
+      .adm-up-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px 16px 8px 16px; }
+
+      /* Lưới Up BOM kiểu Google Sheet */
+      #admUpTable td { min-width: 90px; height: 26px; text-align: left; cursor: cell; background: #fff; user-select: none; }
+      body.dark-mode #admUpTable td { background: #1c1f26; color: #d8dadf; }
+      #admUpTable td.adm-up-idx { min-width: 44px; text-align: center; background: #f1f3f4; font-weight: 700; color: #666; cursor: pointer; }
+      body.dark-mode #admUpTable td.adm-up-idx { background: #23262d; color: #9aa0ab; }
+      #admUpTable tr.adm-up-bad td { background: #fdecea; }
+      body.dark-mode #admUpTable tr.adm-up-bad td { background: #4a2626; }
+      #admUpTable td.cell-selected { background: #e8f0fe !important; }
+      body.dark-mode #admUpTable td.cell-selected { background: #26364d !important; color: #fff; }
+      #admUpTable td.adm-editing {
+        background: #fff !important; color: #222 !important; outline: 2px solid #1a73e8; overflow: visible;
+        text-overflow: clip; white-space: pre; user-select: text; cursor: text; z-index: 6;
+      }
+
+      /* Kéo giãn độ rộng cột (toàn app) */
+      .rs-handle { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: col-resize; z-index: 12; touch-action: none; }
+      .rs-handle:hover, .rs-handle.rs-active { background: rgba(251,188,4,0.85); }
+      table.rs-fixed { table-layout: fixed; }
+      table.rs-fixed td, table.rs-fixed th { max-width: none !important; min-width: 0 !important; overflow: hidden; text-overflow: ellipsis; }
+      body.rs-resizing { cursor: col-resize !important; user-select: none; }
+
       /* ===== Modal thêm mục phân quyền / thêm người dùng ===== */
       .simple-modal-field { margin-bottom: 14px; }
       .simple-modal-field label { font-size: 13px; font-weight: 600; color: #333; display: block; margin-bottom: 6px; }
@@ -1715,7 +1756,9 @@
           <button id="excelBtn" class="icon-btn" title="Xuất Excel dữ liệu đang lọc" onclick="exportToExcel()">
             <i class="fa-solid fa-file-excel"></i>
           </button>
-          <button id="colVisBtn" onclick="openColumnVisibilityModal()" style="background:#003DA5;color:#fff;font-weight:bold;">Hiển thị</button>
+          <button id="colVisBtn" class="icon-btn" title="Chọn cột hiển thị" onclick="openColumnVisibilityModal()">
+            <i class="fa-solid fa-table-columns"></i>
+          </button>
         </div>
       </div>
 
@@ -1909,6 +1952,9 @@
               <div style="display:flex; gap:8px;">
                 <button type="button" id="dashSubTabBtn-tiendo" class="quick-btn active" onclick="switchDashSubTab_('tiendo')" style="font-size:14px; padding:8px 16px;">
                   <i class="fa-solid fa-chart-pie" style="margin-right:6px;"></i>Tiến độ
+                </button>
+                <button type="button" id="dashUpBomBtn" class="quick-btn" onclick="openAdminBomPage_('up')" style="display:none; font-size:14px; padding:8px 16px;">
+                  <i class="fa-solid fa-cloud-arrow-up" style="margin-right:6px;"></i>Up BOM
                 </button>
                 <button type="button" id="dashSubTabBtn-thoigian" class="quick-btn" onclick="switchDashSubTab_('thoigian')" style="font-size:14px; padding:8px 16px;">
                   <i class="fa-solid fa-briefcase-clock" style="margin-right:6px;"></i>Thời gian gia công
@@ -3376,6 +3422,13 @@ function confirmModalYes_() {
             columns: LSX_DETAIL_COLUMNS.map(function(c) { return { key: c.key, label: c.label }; }),
             storageKey: 'gcck_colvis_lsxdetail_v1',
             onChange: function() { renderLsxDetailTable_(applyDetailFilters_(lsxDetailRawRows)); }
+          };
+        },
+        admbom: function() {
+          return {
+            columns: COLUMNS.map(function(c) { return { key: c.key, label: c.label }; }),
+            storageKey: 'gcck_colvis_admbom_v1',
+            onChange: function() { admBomRender_(); }
           };
         }
       };
@@ -10416,7 +10469,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       </div>
     </div>
 
-    <div id="genericColVisOverlay" class="colvis-overlay" style="display:none; z-index:480;">
+    <div id="genericColVisOverlay" class="colvis-overlay" style="display:none; z-index:600;">
       <div class="colvis-modal">
         <div class="colvis-header">
           <h3>Chọn cột hiển thị</h3>
@@ -10654,32 +10707,60 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     </div>
   </div>
 
-      <!-- ===== Modal Xóa BOM: tìm + chọn nhiều dòng ===== -->
-    <div id="admBomOverlay" class="colvis-overlay" style="display:none; z-index:540;">
-      <div class="colvis-modal" style="width:min(97vw, 1500px); height:min(92vh, 860px); max-height:94vh;">
-        <div class="colvis-header">
-          <h3 style="color:#c62828;"><i class="fa-solid fa-trash-can" style="margin-right:8px;"></i>Xóa BOM</h3>
-          <span class="upbom-close" onclick="closeAdminBomModal_()" style="cursor:pointer; font-size:22px;">&times;</span>
-        </div>
-        <div style="padding:12px 16px 0 16px;">
+      <!-- ===== TRANG QUẢN TRỊ BOM (full màn hình): Up BOM + Xóa BOM ===== -->
+    <div id="admBomOverlay" class="adm-page" style="display:none;">
+      <div class="adm-page-top">
+        <div class="adm-page-title"><i class="fa-solid fa-database"></i>Quản trị BOM</div>
+        <button type="button" id="admTabBtn-up" class="quick-btn" onclick="admSwitchMode_('up')" style="font-size:14px; padding:8px 16px;">
+          <i class="fa-solid fa-cloud-arrow-up" style="margin-right:6px;"></i>Up BOM</button>
+        <button type="button" id="admTabBtn-xoa" class="quick-btn" onclick="admSwitchMode_('xoa')" style="font-size:14px; padding:8px 16px;">
+          <i class="fa-solid fa-trash-can" style="margin-right:6px;"></i>Xóa BOM</button>
+        <div style="flex:1;"></div>
+        <button type="button" class="icon-btn" title="Về màn hình chọn phần mềm" onclick="admGoHome_()"><i class="fa-solid fa-house"></i></button>
+        <button type="button" class="icon-btn" title="Đóng (Esc)" onclick="closeAdminBomModal_()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- ===== XÓA BOM ===== -->
+      <div id="admPane-xoa" class="adm-pane">
+        <div class="adm-pane-head">
           <div class="search-row">
             <div class="search-input-wrap">
               <input type="text" id="admBomSearchInput" placeholder="Nhập/dán LSX (nhiều LSX cách nhau bởi dấu phẩy, xuống dòng...)" autocomplete="off"
                 onkeydown="if(event.key==='Enter'){event.preventDefault(); admBomSearch_();}" />
             </div>
             <button type="button" id="admBomSearchBtn" onclick="admBomSearch_()">Tìm</button>
+            <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('admbom')"><i class="fa-solid fa-table-columns"></i></button>
           </div>
           <div id="admBomStatus" style="font-size:12px; color:#888; min-height:16px; margin-bottom:6px;"></div>
         </div>
         <div id="admBomTableWrap" class="tracking-table-wrap" style="flex:1; padding:0 16px 8px 16px;"></div>
-        <div class="upbom-footer" style="justify-content:space-between; align-items:center; flex-wrap:wrap;">
+        <div class="adm-pane-foot">
           <div style="font-size:12px; color:#888;">Bấm dòng để chọn · giữ <b>Shift</b> để chọn cả dải · tối đa 300 dòng mỗi lần xóa.</div>
-          <div style="display:flex; gap:10px;">
-            <button type="button" class="upbom-cancel" onclick="closeAdminBomModal_()">Đóng</button>
-            <button type="button" id="admBomDeleteBtn" class="adm-danger-btn" disabled onclick="admBomOpenChoice_()">
-              <i class="fa-solid fa-trash-can"></i><span id="admBomDeleteBtnLabel">Xóa đã chọn (0)</span>
-            </button>
-          </div>
+          <button type="button" id="admBomDeleteBtn" class="adm-danger-btn" disabled onclick="admBomOpenChoice_()">
+            <i class="fa-solid fa-trash-can"></i><span id="admBomDeleteBtnLabel">Xóa đã chọn (0)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== UP BOM ===== -->
+      <div id="admPane-up" class="adm-pane">
+        <div class="adm-up-toolbar">
+          <button type="button" class="quick-btn" onclick="admUpAddRows_(10)"><i class="fa-solid fa-plus"></i> Thêm 10 dòng</button>
+          <button type="button" class="quick-btn" onclick="admUpDeleteRows_()"><i class="fa-solid fa-minus"></i> Xóa dòng đã chọn</button>
+          <button type="button" class="quick-btn" onclick="admUpClearAll_()"><i class="fa-solid fa-eraser"></i> Xóa trắng bảng</button>
+          <button type="button" class="quick-btn" onclick="admUpDoUndo_()"><i class="fa-solid fa-rotate-left"></i> Hoàn tác</button>
+          <div id="admUpInfo" style="font-size:12px; color:#888; margin-left:6px;"></div>
+        </div>
+        <div style="padding:0 16px 6px 16px; font-size:12px; color:#888;">
+          Bấm ô rồi <b>Ctrl+V</b> để dán dữ liệu copy từ Sheet. Thứ tự cột = <b>A:AF</b> của sheet "BOM GIAO VIỆC" (copy từ cột C thì bấm ô <b>KHGH</b> rồi dán).
+          Gõ trực tiếp để sửa · Enter/F2/double-click: sửa ô · Delete: xóa nội dung · Ctrl+C/X/Z · Shift+mũi tên: chọn vùng · LSX-STT tự tính từ LSX + STT CT.
+        </div>
+        <div id="admUpTableWrap" class="tracking-table-wrap" style="flex:1; padding:0 16px 8px 16px;"></div>
+        <div class="adm-pane-foot">
+          <div style="font-size:12px; color:#888;">Dòng trùng LSX-STT đã có trên Supabase sẽ được ghi đè. Tối đa 500 dòng mỗi lần lưu.</div>
+          <button type="button" id="admUpSaveBtn" class="adm-danger-btn" style="background:#1e7e34;" onclick="admUpSave_()">
+            <i class="fa-solid fa-cloud-arrow-up"></i><span>Lưu lên Supabase</span>
+          </button>
         </div>
       </div>
     </div>
@@ -10790,55 +10871,75 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   </div>
 
     <script>
-  /* ================= XÓA BOM (chỉ Super Admin) ================= */
+  /* ================= QUẢN TRỊ BOM: XÓA + UP (chỉ Super Admin) ================= */
   const ADM_BOM_MAX_DELETE_ = 300;
-  let admBomRows_ = [];
-  let admBomSel_ = new Set();     // tập lsx_stt đang chọn
-  let admBomLastIdx_ = -1;        // dòng bấm gần nhất, dùng cho Shift+Click
-  let admBomChoice_ = '';         // 'supabase' | 'sheet' | 'both'
-  let admBomBusy_ = false;
-  let admBomReqId_ = 0;
+  const ADM_UP_MAX_ROWS_ = 500;
+  // Thứ tự = cột A:AF của sheet BOM GIAO VIỆC
+  const ADM_UP_COLS_ = [
+    { key: 'may_gc', label: 'Máy GC' }, { key: 'ngay_gc', label: 'Ngày GC' }, { key: 'khgh', label: 'KHGH' },
+    { key: 'lsx', label: 'LSX' }, { key: 'san_pham', label: 'Sản phẩm' }, { key: 'stt_ct', label: 'STT CT' },
+    { key: 'msct', label: 'MSCT' }, { key: 'ten_chi_tiet', label: 'Tên chi tiết' }, { key: 'vat_lieu', label: 'Vật liệu' },
+    { key: 'dai', label: 'Dài' }, { key: 'rong', label: 'Rộng' }, { key: 'day', label: 'Dày' },
+    { key: 'hinh_hop', label: 'Hình/hộp' }, { key: 'dn', label: 'Dn' }, { key: 'dt', label: 'Dt' },
+    { key: 'sl_bo', label: 'SL/Bộ' }, { key: 'sl_dh', label: 'SL/ĐH' }, { key: 'khoi_luong', label: 'KL' },
+    { key: 'cong_doan_truoc', label: 'CĐ.trước' }, { key: 'duc_nhom', label: 'ĐN' }, { key: 'cua_vong', label: 'CV' },
+    { key: 'tien', label: 'Tiện' }, { key: 'phay', label: 'Phay' }, { key: 'nguoi', label: 'Nguội' },
+    { key: 'nhiet', label: 'Nhiệt' }, { key: 'cong_doan_sau', label: 'CĐ sau' }, { key: 'ghi_chu_dmvt', label: 'Ghi chú KT' },
+    { key: 'lsx_stt', label: 'LSX-STT' }, { key: 'nhan_vat_tu', label: 'VT' }, { key: 'giao_hang', label: 'GH' },
+    { key: 'nmk', label: 'NMK' }, { key: 'ghi_chu', label: 'Ghi chú' }
+  ];
 
+  let admMode_ = 'xoa';
   function admEl_(id) { return document.getElementById(id); }
+  function admPageOpen_() { const p = admEl_('admBomOverlay'); return !!p && p.style.display !== 'none'; }
 
-  function openAdminBomModal_() {
+  function openAdminBomPage_(mode) {
     if (!isPermAdmin_) { showToast('Chỉ Super Admin mới được dùng chức năng này.', 'error'); return; }
-    admBomRows_ = []; admBomSel_ = new Set(); admBomLastIdx_ = -1;
-    admEl_('admBomSearchInput').value = '';
-    admEl_('admBomStatus').textContent = '';
-    admBomRender_();
+    closeChangePasswordModal_();
     admEl_('admBomOverlay').style.display = 'flex';
-    setTimeout(function() { admEl_('admBomSearchInput').focus(); }, 60);
+    admSwitchMode_(mode || 'xoa');
   }
+  function openAdminBomModal_() { openAdminBomPage_('xoa'); } // nút "Xóa BOM" trong modal Tài khoản
 
   function closeAdminBomModal_() {
-    if (admBomBusy_) return;
+    if (admBomBusy_ || admUpSaving_) return;
+    if (admUpEditing_) admUpCommit_();
     admEl_('admBomChoiceOverlay').style.display = 'none';
     admEl_('admBomOverlay').style.display = 'none';
   }
+  function admGoHome_() { closeAdminBomModal_(); if (!admPageOpen_()) showHomeMenu_(); }
+
+  function admSwitchMode_(mode) {
+    admMode_ = mode;
+    ['up', 'xoa'].forEach(function(m) {
+      admEl_('admTabBtn-' + m).classList.toggle('active', m === mode);
+      admEl_('admPane-' + m).classList.toggle('active', m === mode);
+    });
+    if (mode === 'up') admUpInit_();
+    else setTimeout(function() { admEl_('admBomSearchInput').focus(); }, 60);
+  }
+
+  /* ---------------- XÓA BOM ---------------- */
+  let admBomRows_ = [], admBomSel_ = new Set(), admBomLastIdx_ = -1, admBomChoice_ = '', admBomBusy_ = false, admBomReqId_ = 0;
+
+  function admBomVisibleCols_() { return COLUMNS.filter(function(c) { return isGenericColVisible_('admbom', c.key); }); }
 
   function admBomSearch_() {
-    const raw = admEl_('admBomSearchInput').value;
-    const tokens = raw.split(/[,;\s]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length >= 3; });
-    if (tokens.length === 0) {
-      showToast('Vui lòng nhập LSX (tối thiểu 3 ký tự, nhớ dấu "/").', 'error');
-      return;
-    }
+    const tokens = admEl_('admBomSearchInput').value.split(/[,;\s]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length >= 3; });
+    if (tokens.length === 0) { showToast('Vui lòng nhập LSX (tối thiểu 3 ký tự, nhớ dấu "/").', 'error'); return; }
     const myId = ++admBomReqId_;
     const btn = admEl_('admBomSearchBtn');
     btn.disabled = true;
     admEl_('admBomStatus').textContent = 'Đang tìm...';
-
     google.script.run
       .withSuccessHandler(function(res) {
         if (myId !== admBomReqId_) return;
         btn.disabled = false;
         admBomRows_ = (res && res.rows) || [];
-        admBomSel_ = new Set();
-        admBomLastIdx_ = -1;
-        let msg = 'Tìm thấy ' + admBomRows_.length + ' dòng.';
-        if (res && res.truncated) msg = 'Có ' + res.total + ' dòng, chỉ hiển thị ' + admBomRows_.length + ' dòng đầu — hãy nhập LSX cụ thể hơn.';
-        admEl_('admBomStatus').textContent = msg;
+        admBomSel_ = new Set(); admBomLastIdx_ = -1;
+        admEl_('admBomStatus').textContent = (res && res.truncated)
+          ? 'Có ' + res.total + ' dòng, chỉ hiển thị ' + admBomRows_.length + ' dòng đầu — hãy nhập LSX cụ thể hơn.'
+          : 'Tìm thấy ' + admBomRows_.length + ' dòng.';
         admBomRender_();
       })
       .withFailureHandler(function(err) {
@@ -10851,28 +10952,23 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   }
 
   function admBomRender_() {
-    const wrap = admEl_('admBomTableWrap');
+    const cols = admBomVisibleCols_();
     let html = '<table><tr><th style="width:36px;"><input type="checkbox" id="admBomCheckAll" onchange="admBomToggleAll_(this.checked)" /></th>' +
-      COLUMNS.map(function(c) { return '<th>' + escapeHtml_(c.label) + '</th>'; }).join('') + '</tr>';
-
+      cols.map(function(c) { return '<th>' + escapeHtml_(c.label) + '</th>'; }).join('') + '</tr>';
     if (admBomRows_.length === 0) {
-      html += '<tr><td colspan="' + (COLUMNS.length + 1) + '" class="empty-state-cell">Nhập LSX và bấm Tìm để hiển thị dữ liệu cần xóa.</td></tr>';
+      html += '<tr><td colspan="' + (cols.length + 1) + '" class="empty-state-cell">Nhập LSX và bấm Tìm để hiển thị dữ liệu cần xóa.</td></tr>';
     } else {
       admBomRows_.forEach(function(r, i) {
         html += '<tr data-i="' + i + '" onclick="admBomRowClick_(event,' + i + ')"><td><input type="checkbox" /></td>';
-        COLUMNS.forEach(function(c) {
+        cols.forEach(function(c) {
           const v = r[c.key];
-          let cell;
-          if (c.bool) cell = v ? '&#10003;' : '';
-          else if (c.key === 'khgh') cell = escapeHtml_(formatDate(v));
-          else cell = (v === null || v === undefined) ? '' : escapeHtml_(String(v));
+          const cell = c.bool ? (v ? '&#10003;' : '') : (c.key === 'khgh' ? escapeHtml_(formatDate(v)) : ((v === null || v === undefined) ? '' : escapeHtml_(String(v))));
           html += '<td>' + cell + '</td>';
         });
         html += '</tr>';
       });
     }
-    html += '</table>';
-    wrap.innerHTML = html;
+    admEl_('admBomTableWrap').innerHTML = html + '</table>';
     admBomUpdateUI_();
   }
 
@@ -10881,18 +10977,14 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     if (e.shiftKey && admBomLastIdx_ >= 0) {
       const a = Math.min(admBomLastIdx_, i), b = Math.max(admBomLastIdx_, i);
       for (let k = a; k <= b; k++) admBomSel_.add(admBomRows_[k].lsx_stt);
-    } else {
-      if (admBomSel_.has(key)) admBomSel_.delete(key); else admBomSel_.add(key);
-    }
+    } else if (admBomSel_.has(key)) admBomSel_.delete(key); else admBomSel_.add(key);
     admBomLastIdx_ = i;
     admBomUpdateUI_();
   }
-
   function admBomToggleAll_(checked) {
     admBomRows_.forEach(function(r) { if (checked) admBomSel_.add(r.lsx_stt); else admBomSel_.delete(r.lsx_stt); });
     admBomUpdateUI_();
   }
-
   function admBomUpdateUI_() {
     document.querySelectorAll('#admBomTableWrap tr[data-i]').forEach(function(tr) {
       const row = admBomRows_[Number(tr.getAttribute('data-i'))];
@@ -10901,60 +10993,38 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       const cb = tr.querySelector('input[type=checkbox]');
       if (cb) cb.checked = on;
     });
-    const n = admBomSel_.size;
-    const total = admBomRows_.length;
-    const master = admEl_('admBomCheckAll');
-    if (master) {
-      master.checked = total > 0 && n === total;
-      master.indeterminate = n > 0 && n < total;
-    }
+    const n = admBomSel_.size, total = admBomRows_.length, master = admEl_('admBomCheckAll');
+    if (master) { master.checked = total > 0 && n === total; master.indeterminate = n > 0 && n < total; }
     admEl_('admBomDeleteBtn').disabled = (n === 0);
     admEl_('admBomDeleteBtnLabel').textContent = 'Xóa đã chọn (' + n + ')';
   }
 
-  /* ---- Modal chọn nơi xóa ---- */
   function admBomOpenChoice_() {
     const n = admBomSel_.size;
     if (n === 0) return;
-    if (n > ADM_BOM_MAX_DELETE_) {
-      showToast('Mỗi lần chỉ xóa tối đa ' + ADM_BOM_MAX_DELETE_ + ' dòng. Hiện đang chọn ' + n + ' dòng.', 'error');
-      return;
-    }
+    if (n > ADM_BOM_MAX_DELETE_) { showToast('Mỗi lần chỉ xóa tối đa ' + ADM_BOM_MAX_DELETE_ + ' dòng. Hiện đang chọn ' + n + ' dòng.', 'error'); return; }
     admBomChoice_ = '';
     document.querySelectorAll('.adm-choice').forEach(function(el) { el.classList.remove('selected'); });
     admEl_('admBomChoiceCount').textContent = n;
-
     const keys = Array.from(admBomSel_);
-    const shown = keys.slice(0, 5).map(escapeHtml_).join('<br>');
-    admEl_('admBomChoicePreview').innerHTML = shown + (keys.length > 5 ? '<br>... và ' + (keys.length - 5) + ' dòng khác' : '');
-
+    admEl_('admBomChoicePreview').innerHTML = keys.slice(0, 5).map(escapeHtml_).join('<br>') + (keys.length > 5 ? '<br>... và ' + (keys.length - 5) + ' dòng khác' : '');
     const btn = admEl_('admBomConfirmBtn');
-    btn.disabled = true;
-    btn.textContent = 'Chọn nơi xóa';
+    btn.disabled = true; btn.textContent = 'Chọn nơi xóa';
     admEl_('admBomChoiceOverlay').style.display = 'flex';
   }
-
-  function closeAdminBomChoice_() {
-    if (admBomBusy_) return;
-    admEl_('admBomChoiceOverlay').style.display = 'none';
-  }
-
+  function closeAdminBomChoice_() { if (!admBomBusy_) admEl_('admBomChoiceOverlay').style.display = 'none'; }
   function admBomPickChoice_(val) {
     admBomChoice_ = val;
-    document.querySelectorAll('.adm-choice').forEach(function(el) {
-      el.classList.toggle('selected', el.getAttribute('data-choice') === val);
-    });
+    document.querySelectorAll('.adm-choice').forEach(function(el) { el.classList.toggle('selected', el.getAttribute('data-choice') === val); });
     const btn = admEl_('admBomConfirmBtn');
     btn.disabled = false;
-    const label = { supabase: 'Supabase', sheet: 'Google Sheet', both: 'cả 2 nơi' }[val];
-    btn.textContent = 'Xác nhận xóa ' + admBomSel_.size + ' dòng (' + label + ')';
+    btn.textContent = 'Xác nhận xóa ' + admBomSel_.size + ' dòng (' + { supabase: 'Supabase', sheet: 'Google Sheet', both: 'cả 2 nơi' }[val] + ')';
   }
 
   function admBomConfirmDelete_() {
     if (admBomBusy_ || !admBomChoice_) return;
     const target = admBomChoice_;
-    const items = admBomRows_
-      .filter(function(r) { return admBomSel_.has(r.lsx_stt); })
+    const items = admBomRows_.filter(function(r) { return admBomSel_.has(r.lsx_stt); })
       .map(function(r) { return { lsx_stt: r.lsx_stt, thu_tu: r.thu_tu }; });
     if (items.length === 0) return;
 
@@ -10963,53 +11033,555 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     const oldLabel = btn.textContent;
     btn.disabled = true;
     btn.innerHTML = '<span class="btn-spinner"></span>Đang xóa...';
-
-    function finish_() {
-      admBomBusy_ = false;
-      btn.textContent = oldLabel;
-      btn.disabled = false;
-    }
+    function finish_() { admBomBusy_ = false; btn.textContent = oldLabel; btn.disabled = false; }
 
     google.script.run
       .withSuccessHandler(function(res) {
         finish_();
         admEl_('admBomChoiceOverlay').style.display = 'none';
-
-        // Dòng đã xóa khỏi Supabase thì bỏ khỏi danh sách; xóa Sheet-only thì dòng vẫn còn ở Supabase
         if (target !== 'sheet') {
           const gone = new Set(items.map(function(it) { return it.lsx_stt; }));
           admBomRows_ = admBomRows_.filter(function(r) { return !gone.has(r.lsx_stt); });
         }
-        admBomSel_ = new Set();
-        admBomLastIdx_ = -1;
+        admBomSel_ = new Set(); admBomLastIdx_ = -1;
         admBomRender_();
-
         const parts = [];
         if (target !== 'sheet') parts.push('Supabase: xóa ' + res.supabaseDeleted + ' dòng');
-        if (target !== 'supabase') {
-          parts.push('Sheet: xóa ' + res.sheetDeleted + ' dòng' + (res.sheetNotFound ? ' (' + res.sheetNotFound + ' dòng không thấy trên Sheet)' : ''));
-        }
+        if (target !== 'supabase') parts.push('Sheet: xóa ' + res.sheetDeleted + ' dòng' + (res.sheetNotFound ? ' (' + res.sheetNotFound + ' dòng không thấy trên Sheet)' : ''));
         const msg = 'Đã xử lý — ' + parts.join(' · ');
         admEl_('admBomStatus').textContent = msg;
-
-        if (res.errors && res.errors.length) showToast('Có lỗi: ' + res.errors.join(' | '), 'error');
-        else showToast(msg, 'success');
+        if (res.errors && res.errors.length) showToast('Có lỗi: ' + res.errors.join(' | '), 'error'); else showToast(msg, 'success');
       })
-      .withFailureHandler(function(err) {
-        finish_();
-        showToast('Lỗi xóa BOM: ' + err.message, 'error');
-      })
+      .withFailureHandler(function(err) { finish_(); showToast('Lỗi xóa BOM: ' + err.message, 'error'); })
       .adminDeleteBom(items, target);
   }
 
-  // Esc: đóng modal trên cùng trước, không làm đóng lây modal Tài khoản phía dưới
+  /* ---------------- UP BOM: lưới kiểu Google Sheet ---------------- */
+  let admUpRows_ = [], admUpCells_ = [], admUpPainted_ = [], admUpUndo_ = [];
+  let admUpSel_ = null, admUpAnc_ = null, admUpAct_ = null;
+  let admUpDragging_ = false, admUpEditing_ = null, admUpSaving_ = false;
+
+  function admUpEmptyRow_() { return ADM_UP_COLS_.map(function() { return ''; }); }
+  function admUpInit_() {
+    if (admUpRows_.length) return;
+    for (let i = 0; i < 30; i++) admUpRows_.push(admUpEmptyRow_());
+    admUpRender_();
+  }
+  function admUpSnap_() { admUpUndo_.push(JSON.stringify(admUpRows_)); if (admUpUndo_.length > 30) admUpUndo_.shift(); }
+  function admUpDoUndo_() {
+    if (admUpEditing_) admUpCommit_(true);
+    if (!admUpUndo_.length) { showToast('Không còn gì để hoàn tác.', 'info'); return; }
+    admUpRows_ = JSON.parse(admUpUndo_.pop());
+    admUpRender_();
+  }
+
+  function admUpRender_() {
+    let h = '<table id="admUpTable"><tr><th>#</th>' + ADM_UP_COLS_.map(function(c) { return '<th>' + escapeHtml_(c.label) + '</th>'; }).join('') + '</tr>';
+    admUpRows_.forEach(function(row, r) {
+      h += '<tr data-r="' + r + '"><td class="adm-up-idx" data-idx="' + r + '">' + (r + 1) + '</td>';
+      row.forEach(function(v, c) { h += '<td data-r="' + r + '" data-c="' + c + '">' + escapeHtml_(v) + '</td>'; });
+      h += '</tr>';
+    });
+    const wrap = admEl_('admUpTableWrap');
+    wrap.innerHTML = h + '</table>';
+    admUpCells_ = []; admUpPainted_ = []; admUpEditing_ = null;
+    wrap.querySelectorAll('td[data-c]').forEach(function(td) {
+      const r = +td.dataset.r, c = +td.dataset.c;
+      (admUpCells_[r] = admUpCells_[r] || [])[c] = td;
+    });
+    if (admUpSel_ && (admUpSel_.r1 >= admUpRows_.length)) { admUpSel_ = null; admUpAct_ = null; }
+    admUpPaint_();
+    admUpUpdateInfo_();
+  }
+
+  function admUpPaint_() {
+    admUpPainted_.forEach(function(td) { td.classList.remove('cell-selected', 'cell-active'); });
+    admUpPainted_ = [];
+    if (!admUpSel_) return;
+    for (let r = admUpSel_.r1; r <= admUpSel_.r2; r++) {
+      for (let c = admUpSel_.c1; c <= admUpSel_.c2; c++) {
+        const td = admUpCells_[r] && admUpCells_[r][c];
+        if (td) { td.classList.add('cell-selected'); admUpPainted_.push(td); }
+      }
+    }
+    if (admUpAct_) {
+      const a = admUpCells_[admUpAct_.r] && admUpCells_[admUpAct_.r][admUpAct_.c];
+      if (a) a.classList.add('cell-active');
+    }
+  }
+  function admUpUpdateInfo_() {
+    const filled = admUpRows_.filter(function(row) { return row.some(function(v) { return String(v).trim() !== ''; }); }).length;
+    const el = admEl_('admUpInfo');
+    if (el) el.textContent = filled + ' dòng có dữ liệu / ' + admUpRows_.length + ' dòng (tối đa ' + ADM_UP_MAX_ROWS_ + ')';
+  }
+  function admUpSelectSingle_(r, c) {
+    admUpSel_ = { r1: r, r2: r, c1: c, c2: c }; admUpAnc_ = { r: r, c: c }; admUpAct_ = { r: r, c: c };
+    admUpPaint_();
+  }
+  function admUpExtend_(r, c) {
+    if (!admUpAnc_) { admUpSelectSingle_(r, c); return; }
+    admUpSel_ = { r1: Math.min(admUpAnc_.r, r), r2: Math.max(admUpAnc_.r, r), c1: Math.min(admUpAnc_.c, c), c2: Math.max(admUpAnc_.c, c) };
+    admUpAct_ = { r: r, c: c };
+    admUpPaint_();
+  }
+  function admUpMove_(r, c) {
+    r = Math.max(0, Math.min(r, admUpRows_.length - 1));
+    c = Math.max(0, Math.min(c, ADM_UP_COLS_.length - 1));
+    admUpSelectSingle_(r, c);
+    const td = admUpCells_[r] && admUpCells_[r][c];
+    if (td) td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  function admUpSelectAll_() {
+    admUpSel_ = { r1: 0, r2: admUpRows_.length - 1, c1: 0, c2: ADM_UP_COLS_.length - 1 };
+    admUpAnc_ = { r: 0, c: 0 }; admUpAct_ = { r: 0, c: 0 };
+    admUpPaint_();
+  }
+
+  /* --- sửa trực tiếp trong ô --- */
+  function admUpBeginEdit_(r, c, initial) {
+    const td = admUpCells_[r] && admUpCells_[r][c];
+    if (!td) return;
+    if (admUpEditing_) admUpCommit_();
+    admUpEditing_ = td;
+    td.dataset.orig = admUpRows_[r][c];
+    td.classList.add('adm-editing');
+    td.contentEditable = 'true';
+    td.textContent = (initial !== undefined) ? initial : admUpRows_[r][c];
+    td.focus();
+    const range = document.createRange();
+    range.selectNodeContents(td); range.collapse(false);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  }
+  function admUpCommit_(cancel) {
+    const td = admUpEditing_;
+    if (!td) return;
+    admUpEditing_ = null;
+    const r = +td.dataset.r, c = +td.dataset.c;
+    const val = cancel ? td.dataset.orig : td.innerText.replace(/[\r\n]+/g, ' ').trim();
+    td.contentEditable = 'false';
+    td.classList.remove('adm-editing');
+    td.textContent = val;
+    if (val !== admUpRows_[r][c]) { admUpSnap_(); admUpRows_[r][c] = val; admUpUpdateInfo_(); }
+  }
+
+  /* --- sao chép / dán / xóa --- */
+  function admUpCopy_(isCut) {
+    if (!admUpSel_) return;
+    const b = admUpSel_, lines = [];
+    for (let r = b.r1; r <= b.r2; r++) {
+      const vals = [];
+      for (let c = b.c1; c <= b.c2; c++) vals.push(khbusTsvEscape_(admUpRows_[r][c]));
+      lines.push(vals.join('\t'));
+    }
+    writeToRealClipboard_(lines.join('\n'));
+    if (isCut) admUpClearSel_(); else showToast('Đã copy ' + ((b.r2 - b.r1 + 1) * (b.c2 - b.c1 + 1)) + ' ô.', 'success');
+  }
+  function admUpClearSel_() {
+    if (!admUpSel_) return;
+    admUpSnap_();
+    for (let r = admUpSel_.r1; r <= admUpSel_.r2; r++) {
+      for (let c = admUpSel_.c1; c <= admUpSel_.c2; c++) {
+        admUpRows_[r][c] = '';
+        const td = admUpCells_[r] && admUpCells_[r][c];
+        if (td) td.textContent = '';
+      }
+    }
+    admUpUpdateInfo_();
+  }
+  function admUpPasteText_(text) {
+    text = String(text || '').replace(/\r/g, '');
+    if (text.slice(-1) === '\n') text = text.slice(0, -1);
+    let m = khbusParseTsv_(text);
+    if (!m.length) return;
+
+    // Copy kèm dòng tiêu đề từ Sheet -> bỏ dòng tiêu đề
+    const labels = ADM_UP_COLS_.map(function(c) { return c.label.toLowerCase(); });
+    const hit = m[0].filter(function(v) { return labels.indexOf(String(v).trim().toLowerCase()) !== -1; }).length;
+    if (m.length > 1 && hit >= 4) m = m.slice(1);
+
+    const b = admUpSel_ || { r1: 0, c1: 0, r2: 0, c2: 0 };
+    const maxC = ADM_UP_COLS_.length;
+    admUpSnap_();
+
+    if (m.length === 1 && m[0].length === 1 && (b.r2 > b.r1 || b.c2 > b.c1)) {
+      const v = String(m[0][0]).trim(); // copy 1 ô -> điền cho cả vùng đang chọn
+      for (let r = b.r1; r <= b.r2; r++) for (let c = b.c1; c <= b.c2; c++) admUpRows_[r][c] = v;
+    } else {
+      if (b.r1 + m.length > ADM_UP_MAX_ROWS_) {
+        showToast('Chỉ nhận tối đa ' + ADM_UP_MAX_ROWS_ + ' dòng, phần dư đã bị bỏ qua.', 'info');
+        m = m.slice(0, ADM_UP_MAX_ROWS_ - b.r1);
+      }
+      while (admUpRows_.length < b.r1 + m.length) admUpRows_.push(admUpEmptyRow_());
+      let w = 0;
+      m.forEach(function(row, i) {
+        w = Math.max(w, row.length);
+        row.forEach(function(v, j) {
+          const c = b.c1 + j;
+          if (c < maxC) admUpRows_[b.r1 + i][c] = String(v === null || v === undefined ? '' : v).trim();
+        });
+      });
+      admUpSel_ = { r1: b.r1, r2: b.r1 + m.length - 1, c1: b.c1, c2: Math.min(maxC - 1, b.c1 + w - 1) };
+      admUpAnc_ = { r: b.r1, c: b.c1 }; admUpAct_ = { r: b.r1, c: b.c1 };
+    }
+    admUpRender_();
+    showToast('Đã dán dữ liệu.', 'success');
+  }
+
+  function admUpAddRows_(n) {
+    const room = ADM_UP_MAX_ROWS_ - admUpRows_.length;
+    if (room <= 0) { showToast('Đã đạt tối đa ' + ADM_UP_MAX_ROWS_ + ' dòng.', 'info'); return; }
+    admUpSnap_();
+    for (let i = 0; i < Math.min(n, room); i++) admUpRows_.push(admUpEmptyRow_());
+    admUpRender_();
+  }
+  function admUpDeleteRows_() {
+    if (!admUpSel_) { showToast('Hãy chọn ô/dòng cần xóa trước.', 'info'); return; }
+    admUpSnap_();
+    admUpRows_.splice(admUpSel_.r1, admUpSel_.r2 - admUpSel_.r1 + 1);
+    if (admUpRows_.length === 0) admUpRows_.push(admUpEmptyRow_());
+    admUpSel_ = null; admUpAct_ = null; admUpAnc_ = null;
+    admUpRender_();
+  }
+  function admUpClearAll_() {
+    if (!confirm('Xóa trắng toàn bộ bảng? (có thể hoàn tác bằng nút Hoàn tác)')) return;
+    admUpSnap_();
+    admUpRows_ = [];
+    for (let i = 0; i < 30; i++) admUpRows_.push(admUpEmptyRow_());
+    admUpSel_ = null; admUpAct_ = null; admUpAnc_ = null;
+    admUpRender_();
+  }
+
+  /* --- lưu lên Supabase --- */
+  function admUpSave_() {
+    if (admUpSaving_) return;
+    if (admUpEditing_) admUpCommit_();
+    const payload = [], bad = [];
+    admUpRows_.forEach(function(row, r) {
+      if (!row.some(function(v) { return String(v).trim() !== ''; })) return;
+      const o = { _line: r + 1 };
+      ADM_UP_COLS_.forEach(function(c, i) { o[c.key] = row[i]; });
+      if (!String(o.lsx).trim() || !String(o.stt_ct).trim()) bad.push(r);
+      payload.push(o);
+    });
+    document.querySelectorAll('#admUpTable tr[data-r]').forEach(function(tr) {
+      tr.classList.toggle('adm-up-bad', bad.indexOf(+tr.dataset.r) !== -1);
+    });
+    if (!payload.length) { showToast('Chưa có dữ liệu để lưu.', 'error'); return; }
+    if (bad.length) {
+      showToast('Có ' + bad.length + ' dòng thiếu LSX hoặc STT CT (đã tô đỏ). Vui lòng bổ sung.', 'error');
+      const tr = document.querySelector('#admUpTable tr[data-r="' + bad[0] + '"]');
+      if (tr) tr.scrollIntoView({ block: 'center' });
+      return;
+    }
+    if (!confirm('Đưa ' + payload.length + ' dòng BOM lên Supabase (bảng bom_giao_viec)?\nDòng trùng LSX-STT đã có sẽ bị ghi đè.')) return;
+
+    admUpSaving_ = true;
+    const btn = admEl_('admUpSaveBtn');
+    const oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span>Đang lưu...';
+    function finish_() { admUpSaving_ = false; btn.disabled = false; btn.innerHTML = oldHtml; }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        finish_();
+        showToast('Đã lưu ' + res.saved + ' dòng (thêm mới ' + res.created + ', ghi đè ' + res.updated + ').', 'success');
+        admUpRows_ = []; admUpUndo_ = []; admUpSel_ = null; admUpAct_ = null; admUpAnc_ = null;
+        for (let i = 0; i < 30; i++) admUpRows_.push(admUpEmptyRow_());
+        admUpRender_();
+      })
+      .withFailureHandler(function(err) { finish_(); showToast('Lỗi lưu BOM: ' + err.message, 'error'); })
+      .adminUpBom(payload);
+  }
+
+  /* --- chuột + bàn phím cho lưới --- */
+  (function bindAdmUpGrid_() {
+    const wrap = admEl_('admUpTableWrap');
+    wrap.addEventListener('mousedown', function(e) {
+      if (admUpEditing_ && admUpEditing_.contains(e.target)) return;
+      if (admUpEditing_) admUpCommit_();
+      const idx = e.target.closest('td.adm-up-idx');
+      if (idx) {
+        const r = +idx.dataset.idx, last = ADM_UP_COLS_.length - 1;
+        if (e.shiftKey && admUpAnc_) {
+          admUpSel_ = { r1: Math.min(admUpAnc_.r, r), r2: Math.max(admUpAnc_.r, r), c1: 0, c2: last };
+        } else {
+          admUpSel_ = { r1: r, r2: r, c1: 0, c2: last }; admUpAnc_ = { r: r, c: 0 };
+        }
+        admUpAct_ = { r: r, c: 0 };
+        admUpPaint_(); e.preventDefault(); return;
+      }
+      const td = e.target.closest('td[data-c]');
+      if (!td) return;
+      const r = +td.dataset.r, c = +td.dataset.c;
+      if (e.shiftKey) { admUpExtend_(r, c); admUpDragging_ = false; }
+      else { admUpDragging_ = true; admUpSelectSingle_(r, c); }
+      e.preventDefault();
+    });
+    wrap.addEventListener('mouseover', function(e) {
+      if (!admUpDragging_) return;
+      const td = e.target.closest('td[data-c]');
+      if (td) admUpExtend_(+td.dataset.r, +td.dataset.c);
+    });
+    wrap.addEventListener('dblclick', function(e) {
+      const td = e.target.closest('td[data-c]');
+      if (td) admUpBeginEdit_(+td.dataset.r, +td.dataset.c);
+    });
+    wrap.addEventListener('focusout', function(e) { if (admUpEditing_ && e.target === admUpEditing_) admUpCommit_(); });
+    document.addEventListener('mouseup', function() { admUpDragging_ = false; });
+  })();
+
   document.addEventListener('keydown', function(e) {
-    if (e.key !== 'Escape') return;
-    const choice = admEl_('admBomChoiceOverlay');
-    const main = admEl_('admBomOverlay');
-    if (choice && choice.style.display !== 'none') { e.stopImmediatePropagation(); closeAdminBomChoice_(); return; }
-    if (main && main.style.display !== 'none') { e.stopImmediatePropagation(); closeAdminBomModal_(); }
+    if (!admPageOpen_() || admMode_ !== 'up') return;
+    const t = e.target;
+    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return;
+    const k = e.key, ctrl = e.ctrlKey || e.metaKey;
+    const stop = function() { e.preventDefault(); e.stopImmediatePropagation(); };
+
+    if (admUpEditing_) {
+      if (k === 'Enter') { stop(); const a = admUpAct_; admUpCommit_(); admUpMove_(a.r + 1, a.c); }
+      else if (k === 'Tab') { stop(); const a = admUpAct_; admUpCommit_(); admUpMove_(a.r, a.c + (e.shiftKey ? -1 : 1)); }
+      else if (k === 'Escape') { stop(); admUpCommit_(true); }
+      else e.stopImmediatePropagation(); // gõ chữ bình thường, không cho phím tắt khác của app chen vào
+      return;
+    }
+    if (ctrl && k.toLowerCase() === 'z') { stop(); admUpDoUndo_(); return; }
+    if (ctrl && k.toLowerCase() === 'a') { stop(); admUpSelectAll_(); return; }
+    if (!admUpAct_) return;
+    const a = admUpAct_;
+    if (ctrl && k.toLowerCase() === 'c') { stop(); admUpCopy_(false); }
+    else if (ctrl && k.toLowerCase() === 'x') { stop(); admUpCopy_(true); }
+    else if (ctrl && k.toLowerCase() === 'v') { e.stopImmediatePropagation(); /* để sự kiện paste xử lý */ }
+    else if (k === 'Delete' || k === 'Backspace') { stop(); admUpClearSel_(); }
+    else if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'ArrowLeft' || k === 'ArrowRight') {
+      stop();
+      const dr = k === 'ArrowDown' ? 1 : (k === 'ArrowUp' ? -1 : 0);
+      const dc = k === 'ArrowRight' ? 1 : (k === 'ArrowLeft' ? -1 : 0);
+      if (e.shiftKey) admUpExtend_(Math.max(0, Math.min(a.r + dr, admUpRows_.length - 1)), Math.max(0, Math.min(a.c + dc, ADM_UP_COLS_.length - 1)));
+      else admUpMove_(a.r + dr, a.c + dc);
+    }
+    else if (k === 'Tab') { stop(); admUpMove_(a.r, a.c + (e.shiftKey ? -1 : 1)); }
+    else if (k === 'Enter' || k === 'F2') { stop(); admUpBeginEdit_(a.r, a.c); }
+    else if (!ctrl && !e.altKey && k.length === 1) { stop(); admUpBeginEdit_(a.r, a.c, k); }
   }, true);
+
+  document.addEventListener('paste', function(e) {
+    if (!admPageOpen_() || admMode_ !== 'up') return;
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    if (admUpEditing_) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      document.execCommand('insertText', false, text.replace(/[\r\n\t]+/g, ' '));
+      return;
+    }
+    const t = e.target;
+    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (!admUpSel_) admUpSelectSingle_(0, 0);
+    admUpPasteText_(text);
+  }, true);
+
+  // Esc: đóng modal trên cùng trước (chỉ khi không đang sửa ô)
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape' || admUpEditing_) return;
+    const choice = admEl_('admBomChoiceOverlay');
+    if (choice && choice.style.display !== 'none') { e.stopImmediatePropagation(); closeAdminBomChoice_(); return; }
+    if (admPageOpen_()) { e.stopImmediatePropagation(); closeAdminBomModal_(); }
+  }, true);
+
+  // Hiện nút "Up BOM" ở Dashboard chỉ cho Super Admin
+  (function patchPerm_() {
+    const orig = applyPermissionsToUI_;
+    applyPermissionsToUI_ = function() {
+      orig.apply(this, arguments);
+      const b = document.getElementById('dashUpBomBtn');
+      if (b) b.style.display = isPermAdmin_ ? '' : 'none';
+    };
+  })();
+
+  /* ================= KÉO GIÃN ĐỘ RỘNG CỘT - TOÀN BỘ BẢNG TRONG APP =================
+     Hoạt động như Excel: kéo mép phải tiêu đề cột; nhấp đúp vào mép để trả về mặc định.
+     Độ rộng được nhớ theo tên cột (lưu trên máy), nên tải lại bảng vẫn giữ. */
+  (function initColumnResize_() {
+    const STORE_KEY = 'gcck_colw_v1';
+    const SEL = '#result, #dashboardResult, #tgGcTableWrap, .tracking-table-wrap, #lsxDetailTable, #nsListTable, ' +
+                '#nsTangCaTable, #nsChuNhatTable, #nsMonthlyAbsentTable, #permTableWrap, #admBomTableWrap, #admUpTableWrap';
+    let store = {};
+    try { store = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) {}
+    function persist() { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {} }
+    function norm(t) { return String(t || '').replace(/[\u25B2\u25BC\u25BE]/g, '').replace(/\s+/g, ' ').trim(); }
+    function holderOf(t) { return t.closest(SEL); }
+    function keyOf(t) { const h = holderOf(t); return (h && h.id) ? h.id : 'tbl'; }
+    function zoomOf(t) {
+      const l = t.closest('.app-layout');
+      return l ? (parseFloat(l.style.zoom) || 1) : 1;
+    }
+
+    function headerInfo(t) {
+      const rows = [];
+      for (let i = 0; i < t.rows.length; i++) {
+        const r = t.rows[i];
+        if (!r.cells.length) break;
+        let allTh = true;
+        for (let j = 0; j < r.cells.length; j++) if (r.cells[j].tagName !== 'TH') { allTh = false; break; }
+        if (!allTh) break;
+        rows.push(r);
+      }
+      if (!rows.length) return null;
+      const occ = [], leaf = [];
+      let maxC = 0;
+      rows.forEach(function(row, ri) {
+        occ[ri] = occ[ri] || [];
+        let c = 0;
+        Array.prototype.forEach.call(row.cells, function(th) {
+          while (occ[ri][c]) c++;
+          const cs = th.colSpan || 1, rs = th.rowSpan || 1;
+          for (let i = 0; i < rs; i++) { occ[ri + i] = occ[ri + i] || []; for (let j = 0; j < cs; j++) occ[ri + i][c + j] = true; }
+          if (cs === 1) leaf[c] = th;
+          c += cs;
+          maxC = Math.max(maxC, c);
+        });
+      });
+      const labels = [], seen = {};
+      for (let c = 0; c < maxC; c++) {
+        const base = leaf[c] ? norm(leaf[c].textContent) : ('col' + c);
+        seen[base] = (seen[base] || 0) + 1;
+        labels[c] = base + '#' + seen[base];
+      }
+      return { leaf: leaf, numCols: maxC, labels: labels };
+    }
+
+    function applyWidths(t, info, widths) {
+      const old = t.querySelector(':scope > colgroup.rs-cg');
+      if (old) old.remove();
+      const cg = document.createElement('colgroup');
+      cg.className = 'rs-cg';
+      let sum = 0;
+      for (let c = 0; c < info.numCols; c++) {
+        const col = document.createElement('col');
+        col.style.width = widths[c] + 'px';
+        cg.appendChild(col);
+        sum += widths[c];
+      }
+      t.insertBefore(cg, t.firstChild);
+      t.classList.add('rs-fixed');
+      t.style.width = sum + 'px';
+      t.style.minWidth = '0';
+    }
+
+    function currentWidths(t, info) {
+      const cg = t.querySelector(':scope > colgroup.rs-cg');
+      const w = [];
+      for (let c = 0; c < info.numCols; c++) {
+        if (cg && cg.children[c]) w[c] = parseFloat(cg.children[c].style.width) || 100;
+        else w[c] = info.leaf[c] ? Math.max(40, info.leaf[c].offsetWidth) : 100;
+      }
+      return w;
+    }
+
+    function afterResize(t) {
+      const h = holderOf(t);
+      if (h && h.id === 'result' && typeof applyStickyColumn === 'function') applyStickyColumn();
+    }
+
+    function resetTable(t) {
+      const cg = t.querySelector(':scope > colgroup.rs-cg');
+      if (cg) cg.remove();
+      t.classList.remove('rs-fixed');
+      t.style.width = ''; t.style.minWidth = '';
+      delete store[keyOf(t)];
+      persist();
+      afterResize(t);
+    }
+
+    function attachHandle(t, th, c) {
+      const hd = document.createElement('span');
+      hd.className = 'rs-handle';
+      hd.title = 'Kéo để đổi độ rộng · nhấp đúp để đặt lại';
+      hd.addEventListener('click', function(e) { e.stopPropagation(); });
+      hd.addEventListener('dblclick', function(e) { e.stopPropagation(); resetTable(t); });
+      hd.addEventListener('pointerdown', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        const info = headerInfo(t);
+        if (!info) return;
+        const z = zoomOf(t);
+        const widths = currentWidths(t, info);
+        applyWidths(t, info, widths);
+        const cg = t.querySelector(':scope > colgroup.rs-cg');
+        const startX = e.clientX, startW = widths[c];
+        let raf = 0;
+        hd.setPointerCapture(e.pointerId);
+        hd.classList.add('rs-active');
+        document.body.classList.add('rs-resizing');
+
+        function onMove(ev) {
+          widths[c] = Math.max(40, Math.round(startW + (ev.clientX - startX) / z));
+          cg.children[c].style.width = widths[c] + 'px';
+          t.style.width = widths.reduce(function(a, b) { return a + b; }, 0) + 'px';
+          if (!raf) raf = requestAnimationFrame(function() { raf = 0; afterResize(t); });
+        }
+        function onUp() {
+          hd.removeEventListener('pointermove', onMove);
+          hd.removeEventListener('pointerup', onUp);
+          hd.removeEventListener('pointercancel', onUp);
+          hd.classList.remove('rs-active');
+          document.body.classList.remove('rs-resizing');
+          const map = {};
+          info.labels.forEach(function(lb, i) { map[lb] = widths[i]; });
+          store[keyOf(t)] = map;
+          persist();
+          afterResize(t);
+        }
+        hd.addEventListener('pointermove', onMove);
+        hd.addEventListener('pointerup', onUp);
+        hd.addEventListener('pointercancel', onUp);
+      });
+      th.appendChild(hd);
+    }
+
+    function processTable(t) {
+      if (window.innerWidth <= 768) return;
+      if (!holderOf(t)) return;
+      if (t.querySelector('.rs-handle')) return; // đã xử lý
+      const info = headerInfo(t);
+      if (!info) return;
+
+      for (let c = 0; c < info.numCols; c++) {
+        const th = info.leaf[c];
+        if (!th) continue;
+        if (th.className.indexOf('tgGc-stcol') !== -1) continue; // 2 cột cố định của bảng Thời gian GC có độ rộng cố định bằng CSS
+        attachHandle(t, th, c);
+      }
+
+      const saved = store[keyOf(t)];
+      if (saved && info.labels.some(function(lb) { return saved[lb] !== undefined; })) {
+        const widths = info.labels.map(function(lb, c) {
+          return saved[lb] !== undefined ? saved[lb] : Math.max(90, info.leaf[c] ? info.leaf[c].offsetWidth : 90);
+        });
+        applyWidths(t, info, widths);
+        afterResize(t);
+      }
+    }
+
+    new MutationObserver(function(muts) {
+      const pending = new Set();
+      muts.forEach(function(m) {
+        const cand = [m.target];
+        m.addedNodes.forEach(function(n) { cand.push(n); });
+        cand.forEach(function(n) {
+          if (n.nodeType !== 1) return;
+          if (n.tagName === 'TABLE') { pending.add(n); return; }
+          const t = n.closest ? n.closest('table') : null;
+          if (t) pending.add(t);
+          if (n.tagName !== 'TR' && n.tagName !== 'TD' && n.tagName !== 'TH' && n.querySelectorAll) {
+            n.querySelectorAll('table').forEach(function(x) { pending.add(x); });
+          }
+        });
+      });
+      pending.forEach(processTable);
+    }).observe(document.body, { childList: true, subtree: true });
+
+    document.querySelectorAll('table').forEach(processTable);
+  })();
   </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
