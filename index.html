@@ -450,7 +450,7 @@
 
       /* ===== Toast thông báo (thay cho alert() gây gián đoạn thao tác) ===== */
       #toastStack {
-        position: fixed; right: 16px; bottom: 16px; z-index: 100;
+        position: fixed; right: 16px; bottom: 16px; z-index: 900;
         display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
       }
       .toast {
@@ -1277,6 +1277,41 @@
       .khbus-header-table td { user-select: none; }
       .khbus-header-table [contenteditable="true"] { user-select: text; cursor: text; outline: 2px solid #1a73e8 !important; border-radius: 2px; }
       .khbus-drag-handle i { pointer-events: none; }
+
+            /* ===== Xóa BOM (Super Admin) ===== */
+      .adm-tools-box {
+        background: #fdf3f2; border: 1px solid #f5c6c2; border-radius: 10px; padding: 12px 14px;
+        margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+      }
+      body.dark-mode .adm-tools-box { background: #3a2020; border-color: #5a2f2f; }
+      .adm-danger-btn {
+        background: #c62828; color: #fff; border: none; border-radius: 8px; padding: 9px 18px;
+        font-size: 13px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+      }
+      .adm-danger-btn:hover { background: #a51f1f; }
+      .adm-danger-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+      #admBomTableWrap table { user-select: none; }
+      #admBomTableWrap tr[data-i] { cursor: pointer; }
+      #admBomTableWrap tr[data-i]:hover td { background: #f2f6fd; }
+      #admBomTableWrap tr.admbom-sel td { background: #fdecea !important; }
+      body.dark-mode #admBomTableWrap tr[data-i]:hover td { background: #23293a; }
+      body.dark-mode #admBomTableWrap tr.admbom-sel td { background: #4a2626 !important; color: #fff; }
+      .adm-choice {
+        display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px;
+        border: 2px solid #e3e6ea; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease;
+      }
+      .adm-choice:hover { border-color: #9db8e8; }
+      .adm-choice.selected { border-color: #c62828; background: #fdf3f2; }
+      .adm-choice-icon {
+        width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; font-size: 16px;
+      }
+      .adm-choice-title { font-size: 14px; font-weight: 800; color: #222; }
+      .adm-choice-desc { font-size: 12px; color: #777; line-height: 1.45; margin-top: 2px; }
+      body.dark-mode .adm-choice { border-color: #3a3f4a; }
+      body.dark-mode .adm-choice.selected { border-color: #ff6b6b; background: #3a2020; }
+      body.dark-mode .adm-choice-title { color: #eceef0; }
+      body.dark-mode .adm-choice-desc { color: #9aa0ab; }
 
       /* ===== Modal thêm mục phân quyền / thêm người dùng ===== */
       .simple-modal-field { margin-bottom: 14px; }
@@ -10619,6 +10654,76 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     </div>
   </div>
 
+      <!-- ===== Modal Xóa BOM: tìm + chọn nhiều dòng ===== -->
+    <div id="admBomOverlay" class="colvis-overlay" style="display:none; z-index:540;">
+      <div class="colvis-modal" style="width:min(97vw, 1500px); height:min(92vh, 860px); max-height:94vh;">
+        <div class="colvis-header">
+          <h3 style="color:#c62828;"><i class="fa-solid fa-trash-can" style="margin-right:8px;"></i>Xóa BOM</h3>
+          <span class="upbom-close" onclick="closeAdminBomModal_()" style="cursor:pointer; font-size:22px;">&times;</span>
+        </div>
+        <div style="padding:12px 16px 0 16px;">
+          <div class="search-row">
+            <div class="search-input-wrap">
+              <input type="text" id="admBomSearchInput" placeholder="Nhập/dán LSX (nhiều LSX cách nhau bởi dấu phẩy, xuống dòng...)" autocomplete="off"
+                onkeydown="if(event.key==='Enter'){event.preventDefault(); admBomSearch_();}" />
+            </div>
+            <button type="button" id="admBomSearchBtn" onclick="admBomSearch_()">Tìm</button>
+          </div>
+          <div id="admBomStatus" style="font-size:12px; color:#888; min-height:16px; margin-bottom:6px;"></div>
+        </div>
+        <div id="admBomTableWrap" class="tracking-table-wrap" style="flex:1; padding:0 16px 8px 16px;"></div>
+        <div class="upbom-footer" style="justify-content:space-between; align-items:center; flex-wrap:wrap;">
+          <div style="font-size:12px; color:#888;">Bấm dòng để chọn · giữ <b>Shift</b> để chọn cả dải · tối đa 300 dòng mỗi lần xóa.</div>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="upbom-cancel" onclick="closeAdminBomModal_()">Đóng</button>
+            <button type="button" id="admBomDeleteBtn" class="adm-danger-btn" disabled onclick="admBomOpenChoice_()">
+              <i class="fa-solid fa-trash-can"></i><span id="admBomDeleteBtnLabel">Xóa đã chọn (0)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Modal chọn nơi xóa + xác nhận ===== -->
+    <div id="admBomChoiceOverlay" class="colvis-overlay" style="display:none; z-index:560;" onclick="if(event.target===this) closeAdminBomChoice_()">
+      <div class="colvis-modal" style="width:500px; max-width:94vw; border-radius:14px;">
+        <div class="colvis-header">
+          <h3 style="color:#c62828;"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px;"></i>Xác nhận xóa</h3>
+          <span class="upbom-close" onclick="closeAdminBomChoice_()" style="cursor:pointer; font-size:22px;">&times;</span>
+        </div>
+        <div style="padding:16px 18px; display:flex; flex-direction:column; gap:10px; overflow-y:auto;">
+          <div style="font-size:14px;">Bạn sắp xóa <b id="admBomChoiceCount" style="color:#c62828;">0</b> dòng BOM. Chọn nơi cần xóa:</div>
+          <div id="admBomChoicePreview" style="font-size:12px; color:#888; background:rgba(128,128,128,0.1); border-radius:8px; padding:8px 10px; line-height:1.6; word-break:break-word;"></div>
+
+          <div class="adm-choice" data-choice="supabase" onclick="admBomPickChoice_('supabase')">
+            <div class="adm-choice-icon" style="background:#e6f4ea; color:#1e7e34;"><i class="fa-solid fa-database"></i></div>
+            <div>
+              <div class="adm-choice-title">Chỉ xóa trên Supabase</div>
+              <div class="adm-choice-desc">Xóa khỏi dữ liệu của app. Nếu dòng vẫn còn trên Sheet, lần đồng bộ sau sẽ đưa lại.</div>
+            </div>
+          </div>
+          <div class="adm-choice" data-choice="sheet" onclick="admBomPickChoice_('sheet')">
+            <div class="adm-choice-icon" style="background:#e8f0fe; color:#1a56c4;"><i class="fa-solid fa-table"></i></div>
+            <div>
+              <div class="adm-choice-title">Chỉ xóa ở Google Sheet</div>
+              <div class="adm-choice-desc">Xóa hẳn hàng trên sheet "BOM GIAO VIỆC" (các hàng bên dưới dồn lên). Supabase vẫn giữ dòng này.</div>
+            </div>
+          </div>
+          <div class="adm-choice" data-choice="both" onclick="admBomPickChoice_('both')">
+            <div class="adm-choice-icon" style="background:#fdecea; color:#c62828;"><i class="fa-solid fa-trash-can"></i></div>
+            <div>
+              <div class="adm-choice-title">Xóa cả 2 nơi (Supabase + Sheet)</div>
+              <div class="adm-choice-desc">Xóa sạch hoàn toàn, không bị đồng bộ lại. Thao tác không thể hoàn tác.</div>
+            </div>
+          </div>
+        </div>
+        <div class="upbom-footer">
+          <button type="button" class="upbom-cancel" onclick="closeAdminBomChoice_()">Hủy</button>
+          <button type="button" id="admBomConfirmBtn" class="adm-danger-btn" disabled onclick="admBomConfirmDelete_()">Chọn nơi xóa</button>
+        </div>
+      </div>
+    </div>
+
       <div id="changePassOverlay" class="colvis-overlay" style="display:none;">
     <div class="colvis-modal" style="width:min(94vw, 900px); height:min(90vh, 720px); max-width:97vw; max-height:94vh; min-width:560px; min-height:420px; border-radius:16px; overflow:auto; resize:both; display:flex; flex-direction:column;">
       <div class="colvis-header" style="border-radius:0;">
@@ -10653,6 +10758,13 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
         <div id="permSectionWrap" style="display:none; margin-top:6px;">
           <div style="height:1px; background:#eee; margin-bottom:16px;"></div>
+          <div class="adm-tools-box">
+            <div>
+              <div style="font-size:14px; font-weight:800; color:#c62828;"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px;"></i>Quản trị dữ liệu BOM</div>
+              <div style="font-size:12px; color:#888; margin-top:2px;">Tìm và xóa dòng BOM trên Supabase và/hoặc Google Sheet.</div>
+            </div>
+            <button type="button" class="adm-danger-btn" onclick="openAdminBomModal_()"><i class="fa-solid fa-trash-can"></i> Xóa BOM</button>
+          </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px; flex-wrap:wrap;">
             <h3 style="margin:0; font-size:15px; color:#003DA5;"><i class="fa-solid fa-user-shield" style="margin-right:8px;"></i>Phân quyền người dùng</h3>
             <div style="display:flex; gap:8px;">
@@ -10676,6 +10788,229 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       </div>
     </div>
   </div>
+
+    <script>
+  /* ================= XÓA BOM (chỉ Super Admin) ================= */
+  const ADM_BOM_MAX_DELETE_ = 300;
+  let admBomRows_ = [];
+  let admBomSel_ = new Set();     // tập lsx_stt đang chọn
+  let admBomLastIdx_ = -1;        // dòng bấm gần nhất, dùng cho Shift+Click
+  let admBomChoice_ = '';         // 'supabase' | 'sheet' | 'both'
+  let admBomBusy_ = false;
+  let admBomReqId_ = 0;
+
+  function admEl_(id) { return document.getElementById(id); }
+
+  function openAdminBomModal_() {
+    if (!isPermAdmin_) { showToast('Chỉ Super Admin mới được dùng chức năng này.', 'error'); return; }
+    admBomRows_ = []; admBomSel_ = new Set(); admBomLastIdx_ = -1;
+    admEl_('admBomSearchInput').value = '';
+    admEl_('admBomStatus').textContent = '';
+    admBomRender_();
+    admEl_('admBomOverlay').style.display = 'flex';
+    setTimeout(function() { admEl_('admBomSearchInput').focus(); }, 60);
+  }
+
+  function closeAdminBomModal_() {
+    if (admBomBusy_) return;
+    admEl_('admBomChoiceOverlay').style.display = 'none';
+    admEl_('admBomOverlay').style.display = 'none';
+  }
+
+  function admBomSearch_() {
+    const raw = admEl_('admBomSearchInput').value;
+    const tokens = raw.split(/[,;\s]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length >= 3; });
+    if (tokens.length === 0) {
+      showToast('Vui lòng nhập LSX (tối thiểu 3 ký tự, nhớ dấu "/").', 'error');
+      return;
+    }
+    const myId = ++admBomReqId_;
+    const btn = admEl_('admBomSearchBtn');
+    btn.disabled = true;
+    admEl_('admBomStatus').textContent = 'Đang tìm...';
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (myId !== admBomReqId_) return;
+        btn.disabled = false;
+        admBomRows_ = (res && res.rows) || [];
+        admBomSel_ = new Set();
+        admBomLastIdx_ = -1;
+        let msg = 'Tìm thấy ' + admBomRows_.length + ' dòng.';
+        if (res && res.truncated) msg = 'Có ' + res.total + ' dòng, chỉ hiển thị ' + admBomRows_.length + ' dòng đầu — hãy nhập LSX cụ thể hơn.';
+        admEl_('admBomStatus').textContent = msg;
+        admBomRender_();
+      })
+      .withFailureHandler(function(err) {
+        if (myId !== admBomReqId_) return;
+        btn.disabled = false;
+        admEl_('admBomStatus').textContent = 'Lỗi: ' + err.message;
+        showToast('Lỗi tìm BOM: ' + err.message, 'error');
+      })
+      .adminSearchBom(tokens.join(','));
+  }
+
+  function admBomRender_() {
+    const wrap = admEl_('admBomTableWrap');
+    let html = '<table><tr><th style="width:36px;"><input type="checkbox" id="admBomCheckAll" onchange="admBomToggleAll_(this.checked)" /></th>' +
+      COLUMNS.map(function(c) { return '<th>' + escapeHtml_(c.label) + '</th>'; }).join('') + '</tr>';
+
+    if (admBomRows_.length === 0) {
+      html += '<tr><td colspan="' + (COLUMNS.length + 1) + '" class="empty-state-cell">Nhập LSX và bấm Tìm để hiển thị dữ liệu cần xóa.</td></tr>';
+    } else {
+      admBomRows_.forEach(function(r, i) {
+        html += '<tr data-i="' + i + '" onclick="admBomRowClick_(event,' + i + ')"><td><input type="checkbox" /></td>';
+        COLUMNS.forEach(function(c) {
+          const v = r[c.key];
+          let cell;
+          if (c.bool) cell = v ? '&#10003;' : '';
+          else if (c.key === 'khgh') cell = escapeHtml_(formatDate(v));
+          else cell = (v === null || v === undefined) ? '' : escapeHtml_(String(v));
+          html += '<td>' + cell + '</td>';
+        });
+        html += '</tr>';
+      });
+    }
+    html += '</table>';
+    wrap.innerHTML = html;
+    admBomUpdateUI_();
+  }
+
+  function admBomRowClick_(e, i) {
+    const key = admBomRows_[i].lsx_stt;
+    if (e.shiftKey && admBomLastIdx_ >= 0) {
+      const a = Math.min(admBomLastIdx_, i), b = Math.max(admBomLastIdx_, i);
+      for (let k = a; k <= b; k++) admBomSel_.add(admBomRows_[k].lsx_stt);
+    } else {
+      if (admBomSel_.has(key)) admBomSel_.delete(key); else admBomSel_.add(key);
+    }
+    admBomLastIdx_ = i;
+    admBomUpdateUI_();
+  }
+
+  function admBomToggleAll_(checked) {
+    admBomRows_.forEach(function(r) { if (checked) admBomSel_.add(r.lsx_stt); else admBomSel_.delete(r.lsx_stt); });
+    admBomUpdateUI_();
+  }
+
+  function admBomUpdateUI_() {
+    document.querySelectorAll('#admBomTableWrap tr[data-i]').forEach(function(tr) {
+      const row = admBomRows_[Number(tr.getAttribute('data-i'))];
+      const on = !!row && admBomSel_.has(row.lsx_stt);
+      tr.classList.toggle('admbom-sel', on);
+      const cb = tr.querySelector('input[type=checkbox]');
+      if (cb) cb.checked = on;
+    });
+    const n = admBomSel_.size;
+    const total = admBomRows_.length;
+    const master = admEl_('admBomCheckAll');
+    if (master) {
+      master.checked = total > 0 && n === total;
+      master.indeterminate = n > 0 && n < total;
+    }
+    admEl_('admBomDeleteBtn').disabled = (n === 0);
+    admEl_('admBomDeleteBtnLabel').textContent = 'Xóa đã chọn (' + n + ')';
+  }
+
+  /* ---- Modal chọn nơi xóa ---- */
+  function admBomOpenChoice_() {
+    const n = admBomSel_.size;
+    if (n === 0) return;
+    if (n > ADM_BOM_MAX_DELETE_) {
+      showToast('Mỗi lần chỉ xóa tối đa ' + ADM_BOM_MAX_DELETE_ + ' dòng. Hiện đang chọn ' + n + ' dòng.', 'error');
+      return;
+    }
+    admBomChoice_ = '';
+    document.querySelectorAll('.adm-choice').forEach(function(el) { el.classList.remove('selected'); });
+    admEl_('admBomChoiceCount').textContent = n;
+
+    const keys = Array.from(admBomSel_);
+    const shown = keys.slice(0, 5).map(escapeHtml_).join('<br>');
+    admEl_('admBomChoicePreview').innerHTML = shown + (keys.length > 5 ? '<br>... và ' + (keys.length - 5) + ' dòng khác' : '');
+
+    const btn = admEl_('admBomConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = 'Chọn nơi xóa';
+    admEl_('admBomChoiceOverlay').style.display = 'flex';
+  }
+
+  function closeAdminBomChoice_() {
+    if (admBomBusy_) return;
+    admEl_('admBomChoiceOverlay').style.display = 'none';
+  }
+
+  function admBomPickChoice_(val) {
+    admBomChoice_ = val;
+    document.querySelectorAll('.adm-choice').forEach(function(el) {
+      el.classList.toggle('selected', el.getAttribute('data-choice') === val);
+    });
+    const btn = admEl_('admBomConfirmBtn');
+    btn.disabled = false;
+    const label = { supabase: 'Supabase', sheet: 'Google Sheet', both: 'cả 2 nơi' }[val];
+    btn.textContent = 'Xác nhận xóa ' + admBomSel_.size + ' dòng (' + label + ')';
+  }
+
+  function admBomConfirmDelete_() {
+    if (admBomBusy_ || !admBomChoice_) return;
+    const target = admBomChoice_;
+    const items = admBomRows_
+      .filter(function(r) { return admBomSel_.has(r.lsx_stt); })
+      .map(function(r) { return { lsx_stt: r.lsx_stt, thu_tu: r.thu_tu }; });
+    if (items.length === 0) return;
+
+    admBomBusy_ = true;
+    const btn = admEl_('admBomConfirmBtn');
+    const oldLabel = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span>Đang xóa...';
+
+    function finish_() {
+      admBomBusy_ = false;
+      btn.textContent = oldLabel;
+      btn.disabled = false;
+    }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        finish_();
+        admEl_('admBomChoiceOverlay').style.display = 'none';
+
+        // Dòng đã xóa khỏi Supabase thì bỏ khỏi danh sách; xóa Sheet-only thì dòng vẫn còn ở Supabase
+        if (target !== 'sheet') {
+          const gone = new Set(items.map(function(it) { return it.lsx_stt; }));
+          admBomRows_ = admBomRows_.filter(function(r) { return !gone.has(r.lsx_stt); });
+        }
+        admBomSel_ = new Set();
+        admBomLastIdx_ = -1;
+        admBomRender_();
+
+        const parts = [];
+        if (target !== 'sheet') parts.push('Supabase: xóa ' + res.supabaseDeleted + ' dòng');
+        if (target !== 'supabase') {
+          parts.push('Sheet: xóa ' + res.sheetDeleted + ' dòng' + (res.sheetNotFound ? ' (' + res.sheetNotFound + ' dòng không thấy trên Sheet)' : ''));
+        }
+        const msg = 'Đã xử lý — ' + parts.join(' · ');
+        admEl_('admBomStatus').textContent = msg;
+
+        if (res.errors && res.errors.length) showToast('Có lỗi: ' + res.errors.join(' | '), 'error');
+        else showToast(msg, 'success');
+      })
+      .withFailureHandler(function(err) {
+        finish_();
+        showToast('Lỗi xóa BOM: ' + err.message, 'error');
+      })
+      .adminDeleteBom(items, target);
+  }
+
+  // Esc: đóng modal trên cùng trước, không làm đóng lây modal Tài khoản phía dưới
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    const choice = admEl_('admBomChoiceOverlay');
+    const main = admEl_('admBomOverlay');
+    if (choice && choice.style.display !== 'none') { e.stopImmediatePropagation(); closeAdminBomChoice_(); return; }
+    if (main && main.style.display !== 'none') { e.stopImmediatePropagation(); closeAdminBomModal_(); }
+  }, true);
+  </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
