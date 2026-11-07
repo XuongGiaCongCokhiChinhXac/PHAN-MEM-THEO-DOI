@@ -363,7 +363,7 @@
         border: 1px solid #ccc;
         border-radius: 6px;
         box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-        z-index: 260; /* phải cao hơn .colvis-overlay (200) để không bị đè khi mở filter trong 1 modal như "Chi tiết chưa giao" */
+        z-index: 700; /* phải cao hơn .colvis-overlay (200) để không bị đè khi mở filter trong 1 modal như "Chi tiết chưa giao" */
         padding: 8px;
         font-size: 13px;
         color: #333;
@@ -3305,6 +3305,8 @@ function confirmModalYes_() {
           renderBaoCaoGcTable_('phay');
         } else if (activeFilterTarget === 'baocaogc_nguoi') {
           renderBaoCaoGcTable_('nguoi');
+        } else if (activeFilterTarget === 'admbom') {
+          admBomOnFilterChanged_();
         } else {
           render(applyFilters(lastRows));
         }
@@ -5020,6 +5022,7 @@ function onVtGhQrScanSuccess_(decodedText) {
         if (activeFilterTarget === 'baocaogc_tien') return { rows: baoCaoGcState_.tien.rows, filters: baoCaoGcState_.tien.filters };
         if (activeFilterTarget === 'baocaogc_phay') return { rows: baoCaoGcState_.phay.rows, filters: baoCaoGcState_.phay.filters };
         if (activeFilterTarget === 'baocaogc_nguoi') return { rows: baoCaoGcState_.nguoi.rows, filters: baoCaoGcState_.nguoi.filters };
+        if (activeFilterTarget === 'admbom') return { rows: admBomAll_, filters: admBomFilters_ };
         return { rows: lastRows, filters: filters };
       }
 
@@ -11089,6 +11092,8 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   }
 
   /* ---------------- XÓA BOM ---------------- */
+  // admBomAll_ = toàn bộ kết quả tìm; admBomRows_ = các dòng ĐANG HIỂN THỊ (sau lọc)
+  let admBomAll_ = [], admBomFilters_ = {};
   let admBomRows_ = [], admBomSel_ = new Set(), admBomLastIdx_ = -1, admBomBusy_ = false, admBomReqId_ = 0;
 
   function admBomVisibleCols_() { return COLUMNS.filter(function(c) { return isGenericColVisible_('admbom', c.key); }); }
@@ -11123,7 +11128,9 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       .withSuccessHandler(function(res) {
         if (myId !== admBomReqId_) return;
         btn.disabled = false;
-        admBomRows_ = (res && res.rows) || [];
+        admBomAll_ = (res && res.rows) || [];
+        admBomFilters_ = {};
+        admBomApplyView_();
         admBomSel_ = new Set(); admBomLastIdx_ = -1;
         admEl_('admBomStatus').textContent = (res && res.truncated)
           ? 'Có ' + res.total + ' dòng, chỉ hiển thị ' + admBomRows_.length + ' dòng đầu — hãy nhập LSX cụ thể hơn.'
@@ -11139,12 +11146,42 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       .adminSearchBom(tokens.join(','));
   }
 
+    function admBomApplyView_() {
+    admBomRows_ = admBomAll_.filter(function(r) {
+      for (const k in admBomFilters_) {
+        const allowed = admBomFilters_[k];
+        if (allowed && !allowed.has(normalizeValue(k, r[k]))) return false;
+      }
+      return true;
+    });
+  }
+
+  /** Gọi sau khi bấm OK trong popup lọc. */
+  function admBomOnFilterChanged_() {
+    admBomApplyView_();
+    const visible = new Set(admBomRows_.map(function(r) { return r.lsx_stt; }));
+    admBomSel_ = new Set(Array.from(admBomSel_).filter(function(k) { return visible.has(k); })); // chỉ giữ dòng đang thấy
+    admBomLastIdx_ = -1;
+    admBomRender_();
+    const n = Object.keys(admBomFilters_).length;
+    admEl_('admBomStatus').innerHTML = n
+      ? 'Đang lọc: hiển thị <b>' + admBomRows_.length + '</b>/' + admBomAll_.length + ' dòng · ' +
+        '<a href="javascript:void(0)" onclick="admBomClearFilters_()" style="color:#1a73e8; font-weight:700;">Bỏ tất cả bộ lọc</a>'
+      : 'Tìm thấy ' + admBomAll_.length + ' dòng.';
+  }
+  function admBomClearFilters_() { admBomFilters_ = {}; admBomOnFilterChanged_(); }
+
   function admBomRender_() {
     const cols = admBomVisibleCols_();
     let html = '<table><tr><th style="width:36px;"><input type="checkbox" id="admBomCheckAll" onchange="admBomToggleAll_(this.checked)" /></th>' +
-      cols.map(function(c) { return '<th>' + escapeHtml_(c.label) + '</th>'; }).join('') + '</tr>';
+      cols.map(function(c) {
+        const act = admBomFilters_[c.key] ? ' active' : '';
+        return '<th>' + escapeHtml_(c.label) +
+          '<span class="filter-icon' + act + '" onclick="event.stopPropagation(); openFilterPopup(\'' + c.key + '\', this, \'admbom\')">&#9662;</span></th>';
+      }).join('') + '</tr>';
     if (admBomRows_.length === 0) {
-      html += '<tr><td colspan="' + (cols.length + 1) + '" class="empty-state-cell">Nhập LSX hoặc bấm loại đơn (BUS, GHE...) rồi Tìm để hiển thị dữ liệu cần xóa.</td></tr>';
+      html += '<tr><td colspan="' + (cols.length + 1) + '" class="empty-state-cell">' +
+        (admBomAll_.length ? 'Không có dòng nào phù hợp bộ lọc.' : 'Nhập LSX hoặc bấm loại đơn (BUS, GHE...) rồi Tìm để hiển thị dữ liệu cần xóa.') + '</td></tr>';
     } else {
       admBomRows_.forEach(function(r, i) {
         html += '<tr data-i="' + i + '"><td><input type="checkbox" /></td>';
@@ -11265,8 +11302,9 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         admEl_('admChoiceOverlay').style.display = 'none';
         if (target !== 'sheet') {
           const gone = new Set(items.map(function(it) { return it.lsx_stt; }));
-          admBomRows_ = admBomRows_.filter(function(r) { return !gone.has(r.lsx_stt); });
+          admBomAll_ = admBomAll_.filter(function(r) { return !gone.has(r.lsx_stt); });
         }
+        admBomApplyView_();
         admBomSel_ = new Set(); admBomLastIdx_ = -1;
         admBomRender_();
         const parts = [];
