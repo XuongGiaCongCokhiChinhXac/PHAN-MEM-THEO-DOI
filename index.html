@@ -1448,7 +1448,7 @@ body.dark-mode .adm-date-box { background: #23262d; border-color: #3a3f4a; color
     }
 
     function callServer_(fnName, args, retriesLeft, reqId) {
-      if (retriesLeft === undefined) retriesLeft = 1;
+      if (retriesLeft === undefined) retriesLeft = (fnName === 'adminDeleteBom' || fnName === 'adminUpBom') ? 0 : 1;
       if (!reqId) reqId = newReqId_(); // GIỮ NGUYÊN khi retry -> server nhận ra là cùng 1 lệnh, không ghi trùng
       if (Date.now() < quotaBlockedUntil_ && QUOTA_SILENT_FUNCTIONS_.indexOf(fnName) !== -1) {
         return Promise.reject(new Error('Tạm dừng do hết hạn mức'));
@@ -10826,6 +10826,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         <div class="pm-body">
           <div id="admChoicePreview" style="font-size:12px; color:#888; background:rgba(128,128,128,0.1); border-radius:8px; padding:8px 10px; line-height:1.6; word-break:break-word;"></div>
           <div id="admChoiceOpts" style="display:flex; flex-direction:column; gap:10px;"></div>
+          <div id="admChoiceError" style="display:none; background:#fdecea; color:#c62828; border-radius:8px; padding:9px 12px; font-size:13px; font-weight:600; line-height:1.5;"></div>
         </div>
         <div class="pm-foot">
           <button type="button" class="pm-btn cancel" onclick="closeAdmChoice_()">Hủy</button>
@@ -11071,6 +11072,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     const btn = admEl_('admChoiceConfirmBtn');
     btn.className = 'pm-btn ' + cfg.btnTone;
     btn.disabled = true; btn.textContent = cfg.idle;
+    admChoiceShowError_('');
     ov.style.display = 'flex';
     if (cfg.preset) admPickChoice_(cfg.preset);
   }
@@ -11282,7 +11284,14 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     admOpenChoice_('del', n, Array.from(admBomSel_));
   }
 
-  function admBomConfirmDelete_() {
+    function admChoiceShowError_(msg) {
+    const el = admEl_('admChoiceError');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.display = msg ? 'block' : 'none';
+  }
+
+    function admBomConfirmDelete_() {
     if (admBomBusy_ || !admChoiceVal_) return;
     const target = admChoiceVal_;
     const items = admBomRows_.filter(function(r) { return admBomSel_.has(r.lsx_stt); })
@@ -11290,6 +11299,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     if (items.length === 0) return;
 
     admBomBusy_ = true;
+    admChoiceShowError_('');
     const btn = admEl_('admChoiceConfirmBtn');
     const oldLabel = btn.textContent;
     btn.disabled = true;
@@ -11299,6 +11309,20 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     google.script.run
       .withSuccessHandler(function(res) {
         finish_();
+        const hasErr = res.errors && res.errors.length;
+        const sheetFailed = (target !== 'supabase') && res.sheetDeleted === 0;
+
+        // CHƯA xóa được -> GIỮ modal, báo lỗi ngay trong modal
+        if (hasErr || sheetFailed) {
+          const msg = hasErr
+            ? 'Chưa xóa được: ' + res.errors.join(' | ')
+            : 'Không tìm thấy các dòng này trên Google Sheet (có thể đã bị xóa hoặc đã dịch dòng). Hãy bấm Tìm lại để kiểm tra.';
+          admChoiceShowError_(msg);
+          showToast(msg, 'error');
+          return;
+        }
+
+        // Xóa XONG -> đóng modal
         admEl_('admChoiceOverlay').style.display = 'none';
         if (target !== 'sheet') {
           const gone = new Set(items.map(function(it) { return it.lsx_stt; }));
@@ -11310,11 +11334,16 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         const parts = [];
         if (target !== 'sheet') parts.push('Supabase: xóa ' + res.supabaseDeleted + ' dòng');
         if (target !== 'supabase') parts.push('Sheet: xóa ' + res.sheetDeleted + ' dòng' + (res.sheetNotFound ? ' (' + res.sheetNotFound + ' dòng không thấy trên Sheet)' : ''));
-        const msg = 'Đã xử lý — ' + parts.join(' · ');
+        const msg = 'Đã xóa xong — ' + parts.join(' · ');
         admEl_('admBomStatus').textContent = msg;
-        if (res.errors && res.errors.length) showToast('Có lỗi: ' + res.errors.join(' | '), 'error'); else showToast(msg, 'success');
+        showToast(msg, 'success');
       })
-      .withFailureHandler(function(err) { finish_(); showToast('Lỗi xóa BOM: ' + err.message, 'error'); })
+      .withFailureHandler(function(err) {
+        finish_();
+        const msg = 'Chưa xác nhận được kết quả: ' + err.message + '. Modal được giữ lại; hãy bấm Tìm lại để kiểm tra dòng còn hay đã mất.';
+        admChoiceShowError_(msg);
+        showToast('Lỗi xóa BOM: ' + err.message, 'error');
+      })
       .adminDeleteBom(items, target);
   }
 
