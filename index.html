@@ -4760,6 +4760,7 @@ function saveVtGhBatch_() {
     .withSuccessHandler(function() {
       showToast('Đã lưu ' + items.length + ' món.', 'success');
       if (mode === 'nhanvattu') loadVtData_(); else loadGhData2_();
+      refreshDashboardSilently_(); // Server đã tự tính lại % -> Dashboard cập nhật ngay, không chờ đồng bộ
     })
     .withFailureHandler(function(err) { showToast('Lỗi lưu: ' + err.message, 'error'); })
     [fnName](items);
