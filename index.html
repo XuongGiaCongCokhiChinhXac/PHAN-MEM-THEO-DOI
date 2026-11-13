@@ -1403,6 +1403,23 @@ body.dark-mode #admUpTable td.adm-up-ro { background: #202838; color: #8fc1ff; }
 body.dark-mode .adm-date-box { background: #23262d; border-color: #3a3f4a; color: #d8dadf; }
 .quick-btn:disabled { opacity: .5; cursor: not-allowed; }
 
+/* ===== Nút lọc loại đơn hàng (Dashboard) - gọn, hiện đại ===== */
+#dashboardSummary { gap: 8px !important; align-items: center; }
+.dash-type-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px; border-radius: 14px; border: 1px solid #cfd6e4;
+  background: #fff; color: #003DA5; font-size: 12px; font-weight: 800;
+  cursor: pointer; line-height: 1.2; transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.dash-type-btn:hover { background: #eef3fc; }
+.dash-type-btn .dash-type-count { font-weight: 700; color: #6b7280; }
+.dash-type-btn.active { background: #003DA5; border-color: #003DA5; color: #fff; }
+.dash-type-btn.active .dash-type-count { color: #cfe0ff; }
+body.dark-mode .dash-type-btn { background: #23262d; border-color: #3a3f4a; color: #8fc1ff; }
+body.dark-mode .dash-type-btn:hover { background: #2a3040; }
+body.dark-mode .dash-type-btn .dash-type-count { color: #9aa0ab; }
+body.dark-mode .dash-type-btn.active { background: #0c2f6e; border-color: #0c2f6e; color: #fff; }
+
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   </head>
@@ -1712,21 +1729,9 @@ const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs_);
           <button class="sidebar-nav-btn" data-tab="tab-khbus" onclick="switchTab('tab-khbus')">
             <i class="fa-solid fa-table"></i><span class="nav-label">KH BUS</span>
           </button>
-          <button type="button" class="sidebar-nav-btn" id="sidebarBaoCaoGcToggleBtn" onclick="toggleSidebarBaoCaoGcList_()" style="justify-content:space-between; width:100%;">
-            <span style="display:flex; align-items:center; gap:10px;"><i class="fa-solid fa-clipboard-list"></i><span class="nav-label">Báo cáo GC</span></span>
-            <i class="fa-solid fa-chevron-down nav-label" id="sidebarBaoCaoGcChevron" style="transition:transform 0.2s ease;"></i>
+          <button class="sidebar-nav-btn" data-tab="tab-baocaogc" onclick="switchTab('tab-baocaogc')">
+            <i class="fa-solid fa-clipboard-list"></i><span class="nav-label">Báo cáo GC</span>
           </button>
-          <div id="sidebarBaoCaoGcList" class="sidebar-subtab-list" style="display:none;">
-            <button type="button" class="sidebar-nav-btn" data-subtab="tien" onclick="switchTab('tab-baocaogc'); switchBaoCaoGcSubTab_('tien');">
-              <i class="fa-solid fa-record-vinyl"></i><span class="nav-label">Tiện</span>
-            </button>
-            <button type="button" class="sidebar-nav-btn" data-subtab="phay" onclick="switchTab('tab-baocaogc'); switchBaoCaoGcSubTab_('phay');">
-              <i class="fa-solid fa-gear"></i><span class="nav-label">Phay</span>
-            </button>
-            <button type="button" class="sidebar-nav-btn" data-subtab="nguoi" onclick="switchTab('tab-baocaogc'); switchBaoCaoGcSubTab_('nguoi');">
-              <i class="fa-solid fa-hammer"></i><span class="nav-label">Nguội</span>
-            </button>
-          </div>
         </div>
 
         <div id="sidebarNhanSuGroup" style="display:none;">
@@ -4468,7 +4473,7 @@ function tgGcStickyColClass_(arrIdx) {
           khbusStartPolling_();
         } else if (tabId === 'tab-baocaogc') {
           activeTrackingTab_ = null;
-          renderBaoCaoGcTable_('tien');
+          switchBaoCaoGcSubTab_(bcgcActiveType_() || 'tien'); // mở đúng chuyền đang xem, mặc định Tiện
         } else if (tabId === 'tab-nhansu-dashboard') {
           activeTrackingTab_ = null;
           loadNhanSuDashboard_();
@@ -7573,10 +7578,8 @@ function onVtGhQrScanSuccess_(decodedText) {
         const num = Number(fraction);
         if (isNaN(num)) return '';
         const pct = Math.round(num * 100); // số nguyên, không lẻ thập phân (VD 42.9% -> 43%)
-        let bg, color, weight = '600';
-        if (pct >= 100) { bg = '#34a853'; color = '#fff'; weight = 'bold'; }
-        else if (pct >= 50) { bg = '#fbbc04'; color = '#3a2e00'; }
-        else { bg = '#ff8a3d'; color = '#fff'; }
+        const tone = progressTone_(pct);
+        const bg = tone.bg, color = tone.fg, weight = '700';
         return '<span style="display:inline-block; padding:2px 8px; border-radius:10px; background:' +
           bg + '; color:' + color + '; font-weight:' + weight + '; font-size:11px; white-space:nowrap;">' +
           pct + '%</span>';
@@ -7584,24 +7587,15 @@ function onVtGhQrScanSuccess_(decodedText) {
 
       // Vẽ 1 ô chi tiết chuyền dạng lưới 2x2: Tổng / Gia công / Còn lại / Tiến độ - to, rõ,
       // giống cách quản lý xem trên Google Sheet "TỔNG HỢP CÁC ĐƠN HÀNG".
-      function chuyenPercentColor_(pct) {
-        const stops = [
-          { p: 0,   c: [214, 40, 40]  },
-          { p: 33,  c: [255, 140, 0]  },
-          { p: 66,  c: [251, 188, 4]  },
-          { p: 100, c: [52, 168, 83]  }
-        ];
-        let a = stops[0], b = stops[stops.length - 1];
-        for (let i = 0; i < stops.length - 1; i++) {
-          if (pct >= stops[i].p && pct <= stops[i + 1].p) { a = stops[i]; b = stops[i + 1]; break; }
-        }
-        const range = (b.p - a.p) || 1;
-        const t = Math.max(0, Math.min(1, (pct - a.p) / range));
-        const r = Math.round(a.c[0] + (b.c[0] - a.c[0]) * t);
-        const g = Math.round(a.c[1] + (b.c[1] - a.c[1]) * t);
-        const bl = Math.round(a.c[2] + (b.c[2] - a.c[2]) * t);
-        return 'rgb(' + r + ',' + g + ',' + bl + ')';
+            // 3 màu nhạt: xanh lá (100%), vàng (50-99%), đỏ (<50%)
+      function progressTone_(pct) {
+        pct = Number(pct) || 0;
+        if (pct >= 100) return { bg: '#dcf3e3', fg: '#1b7a3a', solid: '#5fbf7f' };
+        if (pct >= 50)  return { bg: '#fff1c2', fg: '#8a6500', solid: '#f2c94c' };
+        return { bg: '#fde0de', fg: '#b3261e', solid: '#ef8c86' };
       }
+      function chuyenPercentColor_(pct) { return progressTone_(pct).bg; }
+      function chuyenPercentTextColor_(pct) { return progressTone_(pct).fg; }
 
       function buildChuyenCell_(info) {
         const tong = Number(info && info.tong) || 0;
@@ -7616,7 +7610,7 @@ function onVtGhQrScanSuccess_(decodedText) {
         const pctNum = Number(info.td);
         const pct = isNaN(pctNum) ? Math.round((gc / tong) * 100) : Math.round(pctNum * 100);
         const bg = chuyenPercentColor_(pct);
-        const textColor = (pct >= 33 && pct < 66) ? '#3a2e00' : '#fff';
+        const textColor = chuyenPercentTextColor_(pct);
 
         // Bỏ nhãn "%" thừa phía trên - chỉ để đúng 1 số kiểu "100%", "50%"
         return '<td class="chuyen-cell"><div class="chuyen-grid">' +
@@ -7636,7 +7630,7 @@ try { priorityTags_ = JSON.parse(localStorage.getItem(PRIORITY_TAGS_CACHE_KEY) |
 function loadPriorityTagsFromServer_() {
   fetchPriorityTagsDirect_()
     .then(function(tags) {
-      priorityTags_ = tags || {};
+      priorityTags_ = pruneOrphanPriorityTags_(tags || {});
       try { localStorage.setItem(PRIORITY_TAGS_CACHE_KEY, JSON.stringify(priorityTags_)); } catch (e) {}
       renderDashboard_();
     })
@@ -7661,7 +7655,7 @@ function pollPriorityTagsSilently_() {
   if (document.hidden) return; // tab đang ẩn -> bỏ qua, đỡ tốn quota Supabase
   fetchPriorityTagsDirect_()
     .then(function(tags) {
-      tags = tags || {};
+      tags = pruneOrphanPriorityTags_(tags || {});
       if (priorityTagsAreEqual_(tags, priorityTags_)) return; // không có gì đổi -> bỏ qua, không vẽ lại
       priorityTags_ = tags;
       try { localStorage.setItem(PRIORITY_TAGS_CACHE_KEY, JSON.stringify(priorityTags_)); } catch (e) {}
@@ -7687,7 +7681,7 @@ function pollPriorityTagsSilently_() {
         if (!tag) return { label: '', bg: '#fff', color: '#c62828', tint: '' };
         const custom = getCustomPriorityTags_().find(function(c) { return c.value === tag; });
         if (custom) return { label: custom.label, bg: custom.bg, color: custom.color, tint: hexToTint_(custom.bg) };
-        return { label: tag, bg: '#fff', color: '#c62828', tint: '' }; // nhãn cũ kiểu prompt() trước đây
+        return { label: '', bg: '#fff', color: '#c62828', tint: '' }; // nhãn không còn tồn tại -> hiện trống
       }
     }
   }
@@ -7736,6 +7730,27 @@ function pollPriorityTagsSilently_() {
 
   function getCustomPriorityTags_() {
     return customPriorityTags_;
+  }
+
+  /* ===== Dọn nhãn "mồ côi" (nhãn tự đặt đã bị xóa) ===== */
+  let customTagsReady_ = false;   // đã biết chắc danh sách nhãn tự đặt thì mới dọn, tránh xóa nhầm lúc đang tải
+  try { customTagsReady_ = localStorage.getItem(CUSTOM_PRIORITY_TAGS_CACHE_KEY) !== null; } catch (e) {}
+
+  function isKnownPriorityTag_(t) {
+    if (!t) return false;
+    if (PRIORITY_RANK_MAP_.hasOwnProperty(t)) return true;
+    return customPriorityTags_.some(function(c) { return c.value === t; });
+  }
+  function pruneOrphanPriorityTags_(map) {
+    if (!customTagsReady_) return map;
+    const out = {};
+    Object.keys(map || {}).forEach(function(k) { if (isKnownPriorityTag_(map[k])) out[k] = map[k]; });
+    return out;
+  }
+  async function deletePriorityTagsByValueDirect_(value) {
+    const url = SUPABASE_URL_DIRECT_ + '/rest/v1/priority_tags?tag=eq.' + encodeURIComponent(value);
+    const res = await fetch(url, { method: 'DELETE', headers: Object.assign({ Prefer: 'return=minimal' }, supabaseHeaders_()) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
   }
 
   async function fetchCustomPriorityTagsDirect_() {
@@ -7789,6 +7804,8 @@ function pollPriorityTagsSilently_() {
     fetchCustomPriorityTagsDirect_()
       .then(function(list) {
         customPriorityTags_ = list || [];
+        customTagsReady_ = true;
+        priorityTags_ = pruneOrphanPriorityTags_(priorityTags_);
         saveCustomPriorityTagsCache_();
         if (dashboardRenderedOnce_) renderDashboard_();
       })
@@ -7812,7 +7829,10 @@ function pollPriorityTagsSilently_() {
         list = list || [];
         if (customPriorityTagsAreEqual_(list, customPriorityTags_)) return;
         customPriorityTags_ = list;
+        customTagsReady_ = true;
+        priorityTags_ = pruneOrphanPriorityTags_(priorityTags_);
         saveCustomPriorityTagsCache_();
+        if (document.getElementById('tab-dashboard').classList.contains('active')) renderDashboard_();
       })
       .catch(function() { /* im lặng, lần sau tự thử lại */ });
   }
@@ -7851,9 +7871,16 @@ function pollPriorityTagsSilently_() {
     customPriorityTags_ = customPriorityTags_.filter(function(c) { return c.value !== value; });
     saveCustomPriorityTagsCache_();
 
-    deleteCustomPriorityTagDirect_(value).then(schedulePrioritySheetSync_).catch(function() {
-      showToast('Chưa xoá được nhãn trên máy chủ (mất mạng?), sẽ còn hiện lại ở máy khác.', 'info');
-    });
+    // Gỡ nhãn khỏi mọi LSX đang gắn (trên máy này + trên Supabase)
+    Object.keys(priorityTags_).forEach(function(lsx) { if (priorityTags_[lsx] === value) delete priorityTags_[lsx]; });
+    try { localStorage.setItem(PRIORITY_TAGS_CACHE_KEY, JSON.stringify(priorityTags_)); } catch (e) {}
+
+    deletePriorityTagsByValueDirect_(value)
+      .then(function() { return deleteCustomPriorityTagDirect_(value); })
+      .then(schedulePrioritySheetSync_)
+      .catch(function() {
+        showToast('Chưa xoá được nhãn trên máy chủ (mất mạng?), sẽ còn hiện lại ở máy khác.', 'info');
+      });
   }
 
   let priorityPopupLsx_ = null;
@@ -8153,6 +8180,22 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
   function getCustomDhTags_() { return customDhTags_; }
 
+  let customDhReady_ = false;
+  try { customDhReady_ = localStorage.getItem(CUSTOM_DH_TAGS_CACHE_KEY) !== null; } catch (e) {}
+  function pruneOrphanDhTags_(map) {
+    if (!customDhReady_) return map;
+    const out = {};
+    Object.keys(map || {}).forEach(function(k) {
+      if (customDhTags_.some(function(c) { return c.value === map[k]; })) out[k] = map[k];
+    });
+    return out;
+  }
+  async function deleteDhTagsByValueDirect_(value) {
+    const url = SUPABASE_URL_DIRECT_ + '/rest/v1/order_tags?tag=eq.' + encodeURIComponent(value);
+    const res = await fetch(url, { method: 'DELETE', headers: Object.assign({ Prefer: 'return=minimal' }, supabaseHeaders_()) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  }
+
   async function fetchDhTagsDirect_() {
     const url = SUPABASE_URL_DIRECT_ + '/rest/v1/order_tags?select=lsx,tag';
     const res = await fetch(url, { headers: supabaseHeaders_() });
@@ -8309,13 +8352,19 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
   function loadDhTagsFromServer_() {
     fetchDhTagsDirect_()
-      .then(function(tags) { dhTags_ = tags || {}; saveDhTagsCache_(); renderDashboard_(); })
+      .then(function(tags) { dhTags_ = pruneOrphanDhTags_(tags || {}); saveDhTagsCache_(); renderDashboard_(); })
       .catch(function() { /* mất mạng -> giữ cache cũ */ });
   }
 
   function loadCustomDhTagsFromServer_() {
     fetchCustomDhTagsDirect_()
-      .then(function(list) { customDhTags_ = list || []; saveCustomDhTagsCache_(); if (dashboardRenderedOnce_) renderDashboard_(); })
+      .then(function(list) {
+        customDhTags_ = list || [];
+        customDhReady_ = true;
+        dhTags_ = pruneOrphanDhTags_(dhTags_);
+        saveCustomDhTagsCache_();
+        if (dashboardRenderedOnce_) renderDashboard_();
+      })
       .catch(function() { /* mất mạng -> giữ cache cũ */ });
   }
 
@@ -8331,7 +8380,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     if (document.hidden) return;
     fetchDhTagsDirect_()
       .then(function(tags) {
-        tags = tags || {};
+        tags = pruneOrphanDhTags_(tags || {});
         if (dhTagsAreEqual_(tags, dhTags_)) return;
         dhTags_ = tags; saveDhTagsCache_();
         if (document.getElementById('tab-dashboard').classList.contains('active')) renderDashboard_();
@@ -8346,7 +8395,10 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       .then(function(list) {
         list = list || [];
         if (customPriorityTagsAreEqual_(list, customDhTags_)) return; // dùng chung hàm so sánh mảng {value,label,bg}
-        customDhTags_ = list; saveCustomDhTagsCache_();
+        customDhTags_ = list; customDhReady_ = true;
+        dhTags_ = pruneOrphanDhTags_(dhTags_);
+        saveCustomDhTagsCache_();
+        if (document.getElementById('tab-dashboard').classList.contains('active')) renderDashboard_();
       })
       .catch(function() {});
   }
@@ -8355,7 +8407,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     if (!tag) return { label: '', bg: '#fff', color: '#666', tint: '' };
     const custom = getCustomDhTags_().find(function(c) { return c.value === tag; });
     if (custom) return { label: custom.label, bg: custom.bg, color: custom.color, tint: hexToTint_(custom.bg) };
-    return { label: tag, bg: '#eee', color: '#333', tint: '' };
+    return { label: '', bg: '#fff', color: '#666', tint: '' };
   }
 
   function buildDhPill_(lsx, tag) {
@@ -8438,6 +8490,9 @@ window.addEventListener('online', tryFlushPriorityQueue_);
   function deleteCustomDhTag_(value) {
     customDhTags_ = customDhTags_.filter(function(c) { return c.value !== value; });
     saveCustomDhTagsCache_();
+    Object.keys(dhTags_).forEach(function(lsx) { if (dhTags_[lsx] === value) delete dhTags_[lsx]; });
+    saveDhTagsCache_();
+    deleteDhTagsByValueDirect_(value).catch(function() {});
     deleteCustomDhTagDirect_(value).catch(function() {
       showToast('Chưa xoá được nhãn ĐH trên máy chủ (mất mạng?), sẽ còn hiện lại ở máy khác.', 'info');
     });
@@ -8719,18 +8774,12 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         CATEGORIES.forEach(function(c) { typeColorMap[c.code] = c; });
 
         summaryEl.innerHTML = typeKeys.map(function(t) {
-          const g = byType[t];
-          const pct = g.totalOrders ? Math.round(g.sumPercent / g.totalOrders) : 0;
-          const meta = typeColorMap[t] || { color: '#576574', dark: false };
-          const textColor = meta.dark ? '#333' : '#fff';
           const isActive = dashboardTypeFilter === t;
-          const activeStyle = isActive ? ' outline:3px solid #333; outline-offset:2px;' : '';
-          return '<div class="dash-type-chip" style="background:' + meta.color + '; color:' + textColor + '; cursor:pointer;' + activeStyle + '" ' +
-            'onclick="filterDashboardByType_(\'' + t + '\')" title="Bấm để lọc bảng theo loại ' + t + '">' +
-            '<span class="dash-type-chip-name">' + t + '</span>' +
-            '<span class="dash-type-chip-pct">' + pct + '%</span>' +
-            '<span class="dash-type-chip-sub">' + g.doneOrders + '/' + g.totalOrders + ' lệnh</span>' +
-          '</div>';
+          return '<button type="button" class="dash-type-btn' + (isActive ? ' active' : '') + '" ' +
+            'onclick="filterDashboardByType_(' + jsArg_(t) + ')" title="Bấm để lọc bảng theo loại ' + escapeHtml_(t) + '">' +
+            '<span>' + escapeHtml_(t) + '</span>' +
+            '<span class="dash-type-count">' + byType[t].totalOrders + '</span>' +
+          '</button>';
         }).join('') || '<div style="color:#999;">Không có dữ liệu phù hợp bộ lọc.</div>';
 
         const tableSourceRows = dashboardTypeFilter ? filtered.filter(function(r) { return r.loai === dashboardTypeFilter; }) : filtered;
@@ -8792,7 +8841,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         let index = 0;
 
         function buildRowHtml(r, rIdx) {
-          const barColor = r.percent >= 100 ? '#34a853' : (r.percent >= 50 ? '#fbbc04' : '#ff8a3d');
+          const barColor = progressTone_(r.percent).solid;
           let colIdx = 0;
           function nextAttrs() { return ' data-r="' + rIdx + '" data-c="' + (colIdx++) + '"'; }
           function vis(key) { return isGenericColVisible_('dashboard', key); }
@@ -8803,8 +8852,8 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           });
 
           const tag = priorityTags_[r.lsx] || '';
-          const rowStyle = priorityRowStyle_(tag);
-          const rowClass = tag ? ' class="dash-row-priority"' : '';
+          const rowStyle = '';  // đơn ưu tiên giữ nền trắng như đơn thường, chỉ có nhãn ở cột Ưu tiên
+          const rowClass = '';
           const safeLsxAttr = jsArg_(r.lsx); // đã có dấu ngoặc kép, dùng trực tiếp bên dưới
           const dataLsxAttr = ' data-lsx="' + escapeHtml_(r.lsx).replace(/"/g, '&quot;') + '"';
           const dhTag = dhTags_[r.lsx] || '';
@@ -8907,7 +8956,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           const dhTagHtml = dhTagVal
             ? '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;background:' + dhMetaVal.bg + ';color:' + dhMetaVal.color + ';">' + escapeHtml_(dhMetaVal.label) + '</span>'
             : '';
-          const barColor = r.percent >= 100 ? '#34a853' : (r.percent >= 50 ? '#fbbc04' : '#ff8a3d');
+          const barColor = progressTone_(r.percent).solid;
 
           html += '<tr>';
           if (vis_('dh')) html += '<td style="' + td_ + 'text-align:center;">' + dhTagHtml + '</td>';
@@ -8928,7 +8977,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
               const pctNum = Number(info.td);
               const pct = isNaN(pctNum) ? Math.round((gc / tong) * 100) : Math.round(pctNum * 100);
               const bg = chuyenPercentColor_(pct);
-              const textColor = (pct >= 33 && pct < 66) ? '#3a2e00' : '#fff';
+              const textColor = chuyenPercentTextColor_(pct);
               html += '<td style="border:1px solid #ddd;padding:4px;text-align:center;">' +
                 '<div style="display:flex;flex-direction:column;gap:2px;">' +
                   '<div style="background:' + bg + ';color:' + textColor + ';border-radius:4px;padding:2px;font-weight:800;">' + pct + '%</div>' +
