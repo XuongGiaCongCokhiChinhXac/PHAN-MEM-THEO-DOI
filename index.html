@@ -8832,26 +8832,96 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         return '0%';
       }
 
-      // Cột cố định hẹp, Sản phẩm 16%, các chuyền chia đều phần còn lại (mỗi chuyền tối thiểu 150px)
-      const DASH_CHUYEN_MIN_PX_ = 150;
-      function dashColgroupHtml_(chuyenCount) {
+            // Cột chưa kéo: tự co giãn. Cột đã kéo: giữ độ rộng người dùng chọn (lưu trên máy)
+      const DASH_COLW_KEY_ = 'gcck_dash_colw_v2';
+      let dashColW_ = {};
+      try { dashColW_ = JSON.parse(localStorage.getItem(DASH_COLW_KEY_) || '{}') || {}; } catch (e) { dashColW_ = {}; }
+      let dashColDefs_ = [];
+
+      function dashCalcMinWidth_() {
+        return dashColDefs_.reduce(function(sum, d) { return sum + (dashColW_[d.k] || d.w || d.min); }, 0);
+      }
+
+      function dashColgroupHtml_(chuyenKeys) {
         const v = function(k) { return isGenericColVisible_('dashboard', k); };
-        let html = '<colgroup>', fixed = 0;
-        const add = function(w) { html += '<col style="width:' + w + 'px">'; fixed += w; };
-        if (v('dh')) add(84);
-        if (v('lsx')) add(116);
-        if (v('sanpham')) html += '<col style="width:16%">';
-        if (v('uutien')) add(74);
-        if (v('khgh')) add(80);
-        for (let i = 0; i < chuyenCount; i++) html += '<col>';
-        if (v('tiendo')) add(76);
-        if (v('khogh')) add(96);
-        if (v('ngayht')) add(84);
-        html += '</colgroup>';
-        dashTableMinWidth_ = fixed + (v('sanpham') ? 200 : 0) + chuyenCount * DASH_CHUYEN_MIN_PX_;
-        return html;
+        const defs = [];
+        if (v('dh')) defs.push({ k: 'dh', w: 84, min: 60 });
+        if (v('lsx')) defs.push({ k: 'lsx', w: 130, min: 80 });
+        if (v('sanpham')) defs.push({ k: 'sanpham', w: null, pct: '16%', min: 200 });
+        if (v('uutien')) defs.push({ k: 'uutien', w: 74, min: 60 });
+        if (v('khgh')) defs.push({ k: 'khgh', w: 80, min: 70 });
+        chuyenKeys.forEach(function(k) { defs.push({ k: 'ch_' + k, w: null, min: 150 }); });
+        if (v('tiendo')) defs.push({ k: 'tiendo', w: 76, min: 60 });
+        if (v('khogh')) defs.push({ k: 'khogh', w: 96, min: 70 });
+        if (v('ngayht')) defs.push({ k: 'ngayht', w: 84, min: 70 });
+        dashColDefs_ = defs;
+
+        let html = '<colgroup>';
+        defs.forEach(function(d) {
+          const saved = dashColW_[d.k];
+          if (saved) html += '<col style="width:' + saved + 'px">';
+          else if (d.w) html += '<col style="width:' + d.w + 'px">';
+          else if (d.pct) html += '<col style="width:' + d.pct + '">';
+          else html += '<col>';
+        });
+        dashTableMinWidth_ = dashCalcMinWidth_();
+        return html + '</colgroup>';
       }
       let dashTableMinWidth_ = 0;
+
+      function dashSaveColW_() {
+        try { localStorage.setItem(DASH_COLW_KEY_, JSON.stringify(dashColW_)); } catch (e) {}
+      }
+
+      // Gắn tay nắm kéo vào mép phải từng tiêu đề cột của bảng Dashboard
+      function dashAttachResize_(table) {
+        if (window.innerWidth <= 768) return;
+        const cg = table.querySelector('colgroup');
+        const ths = table.rows[0] ? table.rows[0].cells : [];
+        if (!cg) return;
+        Array.prototype.forEach.call(ths, function(th, i) {
+          const def = dashColDefs_[i];
+          if (!def || !cg.children[i]) return;
+          const hd = document.createElement('span');
+          hd.className = 'rs-handle';
+          hd.title = 'Kéo để đổi độ rộng · nhấp đúp để tự động lại';
+          hd.addEventListener('click', function(e) { e.stopPropagation(); });
+          hd.addEventListener('dblclick', function(e) {
+            e.stopPropagation();
+            delete dashColW_[def.k];
+            dashSaveColW_();
+            renderDashboard_();
+          });
+          hd.addEventListener('pointerdown', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            const layout = document.querySelector('.app-layout');
+            const z = layout ? (parseFloat(layout.style.zoom) || 1) : 1;
+            const startX = e.clientX, startW = th.offsetWidth;
+            hd.setPointerCapture(e.pointerId);
+            hd.classList.add('rs-active');
+            document.body.classList.add('rs-resizing');
+
+            function onMove(ev) {
+              const w = Math.max(50, Math.round(startW + (ev.clientX - startX) / z));
+              dashColW_[def.k] = w;
+              cg.children[i].style.width = w + 'px';
+              table.style.minWidth = dashCalcMinWidth_() + 'px';
+            }
+            function onUp() {
+              hd.removeEventListener('pointermove', onMove);
+              hd.removeEventListener('pointerup', onUp);
+              hd.removeEventListener('pointercancel', onUp);
+              hd.classList.remove('rs-active');
+              document.body.classList.remove('rs-resizing');
+              dashSaveColW_();
+            }
+            hd.addEventListener('pointermove', onMove);
+            hd.addEventListener('pointerup', onUp);
+            hd.addEventListener('pointercancel', onUp);
+          });
+          th.appendChild(hd);
+        });
+      }
 
       function renderDashboard_() {
         dashboardRenderedOnce_ = true;
@@ -8941,7 +9011,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
         function dashColHeader_(key, html) { return isGenericColVisible_('dashboard', key) ? html : ''; }
 
-        const headerHtml = dashColgroupHtml_(CHUYEN_LABELS.length) + '<tr>' +
+        const headerHtml = dashColgroupHtml_(CHUYEN_LABELS.map(function(c) { return c.key; })) + '<tr>' +
           dashColHeader_('dh', '<th class="dash-dh-col">ĐH' + dashFilterIconHtml_('dhTag') + '</th>') +
           dashColHeader_('lsx', '<th class="dash-lsx-col">LSX' + dashFilterIconHtml_('lsx') + '</th>') +
           dashColHeader_('sanpham', '<th>Sản phẩm' + dashFilterIconHtml_('sanPham') + '</th>') +
@@ -8968,6 +9038,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         wrap.innerHTML = '<table id="dashTable">' + headerHtml + '</table>';
         const table = document.getElementById('dashTable');
         table.style.minWidth = dashTableMinWidth_ + 'px'; // hẹp hơn mức này thì mới xuất hiện thanh cuộn ngang
+        dashAttachResize_(table);
 
         // Dựng bảng theo từng khối nhỏ bằng requestAnimationFrame thay vì build 1 chuỗi HTML
         // khổng lồ rồi gán 1 lần - đây chính là nguyên nhân gây khựng/giật khi bấm qua lại
