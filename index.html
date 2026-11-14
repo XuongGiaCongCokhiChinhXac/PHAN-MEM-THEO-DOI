@@ -1420,6 +1420,26 @@ body.dark-mode .dash-type-btn:hover { background: #2a3040; }
 body.dark-mode .dash-type-btn .dash-type-count { color: #9aa0ab; }
 body.dark-mode .dash-type-btn.active { background: #0c2f6e; border-color: #0c2f6e; color: #fff; }
 
+/* ===== Sidebar trắng - chữ xanh, thu gọn / mở rộng giống trang chủ ===== */
+.sidebar { width: 200px; background: #fff; color: #1a73e8; border-right: 1px solid #e3e6ea; transition: width .2s ease; }
+.sidebar.collapsed { width: 56px; }
+.sidebar .sidebar-nav-btn {
+  color: #1a73e8; font-weight: 700; font-size: 13.5px; border-radius: 0;
+  justify-content: flex-start !important; padding: 11px 16px !important; border-left: 3px solid transparent;
+}
+.sidebar .sidebar-nav-btn:hover { background: #f2f6fd; transform: none; box-shadow: none; }
+.sidebar .sidebar-nav-btn.active { background: #eaf2ff; color: #1a73e8; border-left-color: #1a73e8; box-shadow: none; font-weight: 800; }
+.sidebar.collapsed .sidebar-nav-btn { justify-content: center !important; padding: 12px 0 !important; }
+.sidebar.collapsed .nav-label { display: none; }
+.sidebar .sidebar-toggle-bottom { margin-top: auto; border-top: 1px solid #e3e6ea; border-left: 0; color: #6b7280; }
+.sidebar .sidebar-toggle-bottom:hover { color: #1a73e8; }
+.sidebar .sidebar-divider { background: #e3e6ea; }
+body.dark-mode .sidebar { background: #1c1f26; border-right-color: #2c313c; }
+body.dark-mode .sidebar .sidebar-nav-btn { color: #8fc1ff; }
+body.dark-mode .sidebar .sidebar-nav-btn:hover { background: #23293a; }
+body.dark-mode .sidebar .sidebar-nav-btn.active { background: #1a2c4d; color: #fff; border-left-color: #8fc1ff; }
+body.dark-mode .sidebar .sidebar-toggle-bottom { border-top-color: #2c313c; color: #9aa0ab; }
+
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   </head>
@@ -1706,7 +1726,7 @@ const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs_);
     </div>
 
     <div class="app-layout" id="appLayout" style="display:none;">
-      <nav class="sidebar collapsed" id="mainSidebar">
+      <nav class="sidebar" id="mainSidebar">
         <div style="display:flex;">
           <button class="sidebar-toggle sidebar-nav-btn" onclick="showHomeMenu_()" title="Về màn hình chọn phần mềm" style="width:100%;">
             <i class="fa-solid fa-house"></i><span class="nav-label">Trang chủ</span>
@@ -1743,6 +1763,9 @@ const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs_);
           </button>
         </div>
 
+        <button type="button" class="sidebar-nav-btn sidebar-toggle-bottom" onclick="toggleSidebar()" title="Thu gọn / mở rộng">
+          <i id="sidebarBottomToggleIcon" class="fa-solid fa-angles-left"></i><span class="nav-label">Thu gọn</span>
+        </button>
       </nav>
 
       <!-- Thanh điều hướng dưới cùng - CHỈ hiện trên mobile (xem media query 768px),
@@ -4400,6 +4423,7 @@ function tgGcStickyColClass_(arrIdx) {
         }
         function show_(btn) {
           if (window.innerWidth <= 768) return; // mobile dùng bottom nav, không cần tooltip
+          if (!sidebar.classList.contains('collapsed')) return; // đang mở rộng đã thấy tên tab
           const text = labelOf_(btn);
           if (!text) return;
           currentBtn = btn;
@@ -4832,11 +4856,22 @@ function onVtGhQrScanSuccess_(decodedText) {
         }
       }
 
-      function toggleSidebar() {
-        const collapsed = document.getElementById('mainSidebar').classList.toggle('collapsed');
+      function applySidebarState_(collapsed) {
+        const sb = document.getElementById('mainSidebar');
+        if (!sb) return;
+        sb.classList.toggle('collapsed', collapsed);
         const icon = document.getElementById('sidebarBottomToggleIcon');
         if (icon) icon.className = collapsed ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left';
+        try { localStorage.setItem('gcck_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
       }
+      function toggleSidebar() {
+        applySidebarState_(!document.getElementById('mainSidebar').classList.contains('collapsed'));
+      }
+      (function() {
+        let saved = '0';
+        try { saved = localStorage.getItem('gcck_sidebar_collapsed') || '0'; } catch (e) {}
+        applySidebarState_(saved === '1');
+      })();
 
       /* ================= MÀN HÌNH MENU CHỌN PHẦN MỀM ================= */
       function showHomeMenu_() {
@@ -7156,9 +7191,10 @@ function onVtGhQrScanSuccess_(decodedText) {
       // trở về trước) -> không còn cần nhắc trong danh sách Ưu tiên nữa. Nếu vừa hoàn thành
       // ĐÚNG HÔM NAY thì vẫn hiển thị để quản lý biết đơn vừa xong.
       function isPriorityStillRelevant_(r, todayStr) {
-        if (r.tienDoPercent >= 100 && r.ngayHoanThanh && r.ngayHoanThanh < todayStr) {
-          return false;
-        }
+        // Xong tiến độ từ trước hôm nay -> ẩn
+        if (r.tienDoPercent >= 100 && r.ngayHoanThanh && r.ngayHoanThanh < todayStr) return false;
+        // Giao đủ 100% từ trước hôm nay -> ẩn (đơn xong hôm nay vẫn hiện để quản lý biết)
+        if (r.percent >= 100 && r.ngayHoanThanhKhoGh && r.ngayHoanThanhKhoGh < todayStr) return false;
         return true;
       }
 
@@ -8876,7 +8912,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
               '</div>' +
               '<span style="font-size:11px;">' + r.percent + '%</span>' +
             '</td>';
-          if (vis('ngayht')) html += '<td class="dash-khgh-cell"' + nextAttrs() + '>' + (r.ngayHoanThanhKhoGh ? formatDate(r.ngayHoanThanhKhoGh) : '-') + '</td>';
+          if (vis('ngayht')) html += '<td class="dash-khgh-cell"' + nextAttrs() + '>' + (r.percent >= 100 && r.ngayHoanThanhKhoGh ? formatDate(r.ngayHoanThanhKhoGh) : '-') + '</td>';
           html += '</tr>';
           return html;
         }
@@ -8993,7 +9029,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
             '</div>' +
             '<span style="font-size:11px;">' + r.percent + '%</span>' +
           '</td>';
-          if (vis_('ngayht')) html += '<td style="' + td_ + 'white-space:nowrap;text-align:center;">' + (r.ngayHoanThanhKhoGh ? formatDate(r.ngayHoanThanhKhoGh) : '-') + '</td>';
+          if (vis_('ngayht')) html += '<td style="' + td_ + 'white-space:nowrap;text-align:center;">' + (r.percent >= 100 && r.ngayHoanThanhKhoGh ? formatDate(r.ngayHoanThanhKhoGh) : '-') + '</td>';
           html += '</tr>';
         });
 
@@ -9052,6 +9088,9 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
       function openLsxDetailModal_(lsx) {
         currentLsxDetailLsx_ = lsx;
+        // Xóa kích thước người dùng đã kéo ở lần mở trước -> mỗi đơn hàng tự co vừa nội dung
+        const modalEl_ = document.getElementById('lsxDetailModal');
+        if (modalEl_) { modalEl_.style.width = 'fit-content'; modalEl_.style.height = 'auto'; }
         document.getElementById('lsxDetailTitle').textContent = lsx;
         document.getElementById('lsxDetailTable').innerHTML =
           '<tr><td style="padding:20px; text-align:center; color:#999;">Đang tải...</td></tr>';
@@ -10642,7 +10681,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     </div>
 
      <div id="lsxDetailOverlay" class="colvis-overlay" style="display:none;">
-    <div class="colvis-modal" style="width:min(96vw, 1400px); height:auto; max-width:96vw; max-height:92vh; min-width:520px; min-height:auto; resize:both; overflow:auto;">
+    <div class="colvis-modal" id="lsxDetailModal" style="width:fit-content; height:auto; max-width:96vw; max-height:92vh; min-width:560px; resize:both; overflow:auto;">
         <div class="colvis-header" style="flex-wrap:wrap; align-items:flex-start;">
           <h3 id="lsxDetailTitle" style="font-size:14px; font-weight:normal; flex:1; min-width:260px; margin-right:10px; line-height:1.6;">Chi tiết chưa giao hàng</h3>
           <button type="button" class="icon-btn" title="Chọn cột hiển thị" onclick="openGenericColVisModal_('lsxdetail')" style="margin-right:8px;">
