@@ -1440,6 +1440,12 @@ body.dark-mode .sidebar .sidebar-nav-btn:hover { background: #23293a; }
 body.dark-mode .sidebar .sidebar-nav-btn.active { background: #1a2c4d; color: #fff; border-left-color: #8fc1ff; }
 body.dark-mode .sidebar .sidebar-toggle-bottom { border-top-color: #2c313c; color: #9aa0ab; }
 
+/* ===== Bảng Dashboard: tự chia cột theo khung, không chừa khoảng trắng bên phải ===== */
+#dashTable { table-layout: fixed; width: 100%; }
+#dashTable th, #dashTable td { max-width: none; }
+#dashTable .chuyen-cell { width: auto; min-width: 0; max-width: none; }
+#dashTable .dash-sanpham-col { max-width: none; }
+
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   </head>
@@ -1594,7 +1600,7 @@ const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs_);
             style="width:100%; padding:11px 12px; box-sizing:border-box; font-size:15px; border:1px solid #ddd; border-radius:8px; margin-bottom:12px;" />
 
           <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#555; margin-bottom:18px; cursor:pointer;">
-            <input type="checkbox" id="loginRememberCheck" /> Ghi nhớ đăng nhập (30 ngày)
+            <input type="checkbox" id="loginRememberCheck" /> Ghi nhớ mật khẩu
           </label>
 
           <button type="button" id="loginSubmitBtn" onclick="submitLogin_()"
@@ -7562,6 +7568,77 @@ function onVtGhQrScanSuccess_(decodedText) {
         }
       });
 
+      /* ===== Cập nhật nóng: hỏi thẳng Supabase mỗi 15 giây cho các đơn đang hiển thị ===== */
+      const DASH_LIVE_POLL_MS = 15000;
+      const DASH_LIVE_CHUYEN_ = [['ducNhom', 'duc_nhom'], ['cuaVong', 'cua_vong'], ['tien', 'tien'],
+                                 ['phay', 'phay'], ['nguoi', 'nguoi'], ['nhiet', 'nhiet']];
+      let dashLiveBusy_ = false;
+
+      async function dashLiveFetch_(path) {
+        const res = await fetch(SUPABASE_URL_DIRECT_ + '/rest/v1/' + path, { headers: supabaseHeaders_() });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      }
+
+      async function pollDashboardLive_() {
+        if (dashLiveBusy_ || document.hidden || !currentUser_) return;
+        const tab = document.getElementById('tab-dashboard');
+        if (!tab || !tab.classList.contains('active')) return;
+        const lsxList = (dashboardVisibleRows_ || []).slice(0, 150).map(function(r) { return r.lsx; }).filter(Boolean);
+        if (lsxList.length === 0) return;
+
+        dashLiveBusy_ = true;
+        try {
+          const byLsx = {};
+          dashboardRows.forEach(function(r) { byLsx[r.lsx] = r; });
+          const sel = ['lsx', 'tien_do_don_hang', 'tinh_trang', 'kho_giao_hang_percent'].concat(
+            DASH_LIVE_CHUYEN_.reduce(function(a, c) {
+              return a.concat([c[1] + '_tien_do', c[1] + '_tong', c[1] + '_gc', c[1] + '_con_lai']);
+            }, [])).join(',');
+          const pct = function(v) { const n = Number(v); return (v === null || v === undefined || v === '' || isNaN(n)) ? 0 : Math.round(n * 100); };
+          let changed = false;
+
+          for (let i = 0; i < lsxList.length; i += 50) {
+            const inList = lsxList.slice(i, i + 50).map(function(l) {
+              return encodeURIComponent('"' + String(l).replace(/"/g, '') + '"');
+            }).join(',');
+            const results = await Promise.all([
+              dashLiveFetch_('tien_do_don_hang?lsx=in.(' + inList + ')&select=' + sel),
+              dashLiveFetch_('kho_gh_completion?lsx=in.(' + inList + ')&select=lsx,ngay_hoan_thanh'),
+              dashLiveFetch_('tien_do_completion?lsx=in.(' + inList + ')&select=lsx,ngay_hoan_thanh')
+            ]);
+            const ghDone = {}, tdDone = {};
+            results[1].forEach(function(r) { ghDone[r.lsx] = r.ngay_hoan_thanh; });
+            results[2].forEach(function(r) { tdDone[r.lsx] = r.ngay_hoan_thanh; });
+
+            results[0].forEach(function(s) {
+              const row = byLsx[s.lsx];
+              if (!row) return;
+              const before = JSON.stringify([row.percent, row.tienDoPercent, row.tinhTrang, row.chuyen, row.ngayHoanThanh, row.ngayHoanThanhKhoGh]);
+              row.percent = pct(s.kho_giao_hang_percent);
+              row.tienDoPercent = pct(s.tien_do_don_hang);
+              row.tinhTrang = s.tinh_trang;
+              row.tienDoDonHang = s.tien_do_don_hang;
+              const ch = {};
+              DASH_LIVE_CHUYEN_.forEach(function(c) {
+                ch[c[0]] = { td: s[c[1] + '_tien_do'], tong: s[c[1] + '_tong'], gc: s[c[1] + '_gc'], con: s[c[1] + '_con_lai'] };
+              });
+              row.chuyen = ch;
+              row.ngayHoanThanh = row.tienDoPercent >= 100 ? (tdDone[s.lsx] || row.ngayHoanThanh || null) : null;
+              row.ngayHoanThanhKhoGh = row.percent >= 100 ? (ghDone[s.lsx] || null) : null;
+              const after = JSON.stringify([row.percent, row.tienDoPercent, row.tinhTrang, row.chuyen, row.ngayHoanThanh, row.ngayHoanThanhKhoGh]);
+              if (before !== after) changed = true;
+            });
+          }
+          if (changed) {
+            saveDashboardCache_(dashboardRows);
+            renderDashboard_();
+          }
+        } catch (e) { /* im lặng, 15 giây sau tự thử lại */ }
+        finally { dashLiveBusy_ = false; }
+      }
+      setInterval(pollDashboardLive_, DASH_LIVE_POLL_MS);
+
       function renderProgressSyncStatus_(iso) {
         const el = document.getElementById('progressSyncStatus');
         if (!el) return;
@@ -8755,6 +8832,27 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         return '0%';
       }
 
+      // Cột cố định hẹp, Sản phẩm 16%, các chuyền chia đều phần còn lại (mỗi chuyền tối thiểu 150px)
+      const DASH_CHUYEN_MIN_PX_ = 150;
+      function dashColgroupHtml_(chuyenCount) {
+        const v = function(k) { return isGenericColVisible_('dashboard', k); };
+        let html = '<colgroup>', fixed = 0;
+        const add = function(w) { html += '<col style="width:' + w + 'px">'; fixed += w; };
+        if (v('dh')) add(84);
+        if (v('lsx')) add(116);
+        if (v('sanpham')) html += '<col style="width:16%">';
+        if (v('uutien')) add(74);
+        if (v('khgh')) add(80);
+        for (let i = 0; i < chuyenCount; i++) html += '<col>';
+        if (v('tiendo')) add(76);
+        if (v('khogh')) add(96);
+        if (v('ngayht')) add(84);
+        html += '</colgroup>';
+        dashTableMinWidth_ = fixed + (v('sanpham') ? 200 : 0) + chuyenCount * DASH_CHUYEN_MIN_PX_;
+        return html;
+      }
+      let dashTableMinWidth_ = 0;
+
       function renderDashboard_() {
         dashboardRenderedOnce_ = true;
         const todayStr = getTodayStr_();
@@ -8843,7 +8941,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
         function dashColHeader_(key, html) { return isGenericColVisible_('dashboard', key) ? html : ''; }
 
-        const headerHtml = '<tr>' +
+        const headerHtml = dashColgroupHtml_(CHUYEN_LABELS.length) + '<tr>' +
           dashColHeader_('dh', '<th class="dash-dh-col">ĐH' + dashFilterIconHtml_('dhTag') + '</th>') +
           dashColHeader_('lsx', '<th class="dash-lsx-col">LSX' + dashFilterIconHtml_('lsx') + '</th>') +
           dashColHeader_('sanpham', '<th>Sản phẩm' + dashFilterIconHtml_('sanPham') + '</th>') +
@@ -8869,6 +8967,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
         wrap.innerHTML = '<table id="dashTable">' + headerHtml + '</table>';
         const table = document.getElementById('dashTable');
+        table.style.minWidth = dashTableMinWidth_ + 'px'; // hẹp hơn mức này thì mới xuất hiện thanh cuộn ngang
 
         // Dựng bảng theo từng khối nhỏ bằng requestAnimationFrame thay vì build 1 chuỗi HTML
         // khổng lồ rồi gán 1 lần - đây chính là nguyên nhân gây khựng/giật khi bấm qua lại
@@ -10390,7 +10489,27 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         })
         .restoreSession();
     }
-    tryAutoLogin_();
+    // Ghi nhớ mật khẩu: vẫn hiện màn hình đăng nhập, ô mật khẩu điền sẵn dấu chấm (không lưu mật khẩu thật)
+    const REMEMBER_MASK_ = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+    let passwordIsRemembered_ = false;
+
+    function prefillRememberedPassword_() {
+      let tk = '', last = null;
+      try {
+        tk = localStorage.getItem('gcck_remember_token') || '';
+        last = JSON.parse(localStorage.getItem('gcck_last_user') || 'null');
+      } catch (e) {}
+      if (!tk || !last || !last.msnv) return;
+
+      passwordIsRemembered_ = true;
+      const p = document.getElementById('loginPasswordInput');
+      p.value = REMEMBER_MASK_;
+      document.getElementById('loginRememberCheck').checked = true;
+      p.addEventListener('focus', function() { if (passwordIsRemembered_) p.select(); });
+      // Người dùng gõ/xóa gì vào ô này thì coi như nhập mật khẩu mới
+      p.addEventListener('input', function() { passwordIsRemembered_ = false; });
+    }
+    prefillRememberedPassword_();
 
     // "Đăng nhập tài khoản khác": xoá thông tin đã nhớ, quay về form nhập MSNV trống.
     function switchLoginAccount_() {
@@ -10501,10 +10620,38 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           .withFailureHandler(onFail)
           .registerUser(msnv, hoTen);
       } else {
-        google.script.run
-          .withSuccessHandler(function(user) { finishLogin_(user, remember, pass); })
-          .withFailureHandler(onFail)
-          .loginUser(msnv, pass, remember);
+        let rememberedToken_ = '';
+        try { rememberedToken_ = localStorage.getItem('gcck_remember_token') || ''; } catch (e) {}
+
+        if (passwordIsRemembered_ && rememberedToken_) {
+          // Mật khẩu chưa bị sửa -> đăng nhập bằng token đã ghi nhớ
+          setAuthToken_(rememberedToken_);
+          google.script.run
+            .withSuccessHandler(function(user) {
+              if (String(user.msnv) !== String(msnv)) {
+                try { localStorage.removeItem('gcck_remember_token'); } catch (e) {}
+                setAuthToken_('');
+                passwordIsRemembered_ = false;
+                document.getElementById('loginPasswordInput').value = '';
+                onFail(new Error('Vui lòng nhập lại mật khẩu.'));
+                return;
+              }
+              finishLogin_(user, remember, '');
+            })
+            .withFailureHandler(function() {
+              try { localStorage.removeItem('gcck_remember_token'); } catch (e) {}
+              setAuthToken_('');
+              passwordIsRemembered_ = false;
+              document.getElementById('loginPasswordInput').value = '';
+              onFail(new Error('Phiên ghi nhớ đã hết hạn, vui lòng nhập lại mật khẩu.'));
+            })
+            .restoreSession();
+        } else {
+          google.script.run
+            .withSuccessHandler(function(user) { finishLogin_(user, remember, pass); })
+            .withFailureHandler(onFail)
+            .loginUser(msnv, pass, remember);
+        }
       }
     }
     </script>
@@ -12033,6 +12180,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     function processTable(t) {
       if (window.innerWidth <= 768) return;
       if (!holderOf(t)) return;
+      if (t.id === 'dashTable') return; // bảng Dashboard tự chia cột theo khung
       if (t.querySelector('.rs-handle')) return; // đã xử lý
       const info = headerInfo(t);
       if (!info) return;
