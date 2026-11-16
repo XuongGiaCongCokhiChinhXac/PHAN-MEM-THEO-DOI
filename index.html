@@ -1446,6 +1446,18 @@ body.dark-mode .sidebar .sidebar-toggle-bottom { border-top-color: #2c313c; colo
 #dashTable .chuyen-cell { width: auto; min-width: 0; max-width: none; }
 #dashTable .dash-sanpham-col { max-width: none; }
 
+/* ===== Thanh "Đã chọn / Tổng" dùng chung cho mọi bảng ===== */
+#xgStatusBar {
+  position: fixed; right: 18px; bottom: 14px; z-index: 850; display: none; gap: 18px; align-items: center;
+  background: #f1f3f4; color: #333; border: 1px solid #d5d9e0; border-radius: 8px;
+  padding: 7px 14px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+}
+#xgStatusBar b { color: #1a73e8; }
+body.dark-mode #xgStatusBar { background: #23262d; color: #d8dadf; border-color: #3a3f4a; }
+body.dark-mode #xgStatusBar b { color: #8fc1ff; }
+.xg-table { user-select: none; }
+@media (max-width: 768px) { #xgStatusBar { bottom: 66px; right: 8px; } }
+
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   </head>
@@ -1462,7 +1474,7 @@ body.dark-mode .sidebar .sidebar-toggle-bottom { border-top-color: #2c313c; colo
     // ===== Xử lý hết hạn mức urlfetch của Google =====
     let quotaBlockedUntil_ = 0;
     const QUOTA_SILENT_FUNCTIONS_ = ['heartbeatOnline', 'getNotifications', 'getLastSyncTime',
-      'getLastSyncTimeTienDo', 'getOnlineUsersList'];
+      'getLastSyncTimeTienDo', 'getOnlineUsersList', 'getSyncStamps'];
 
     function friendlyServerError_(msg) {
       const text = String(msg || '');
@@ -6917,6 +6929,7 @@ function onVtGhQrScanSuccess_(decodedText) {
         const statusEl = document.getElementById('bcgcStatus-' + loai);
         const btn = document.getElementById('bcgcRefreshBtn-' + loai);
         const cacheKey = loai + '|' + tokens.join(',').toLowerCase();
+        baoCaoGcState_[loai].lastTokens = tokens; // dùng cho làm mới ngầm khi có dữ liệu mới
         const myId = ++bcgcSearchReqId_[loai];
 
         function finish(rows) {
@@ -12188,6 +12201,52 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       return w;
     }
 
+    // Độ rộng THỰC TẾ đang hiển thị (kể cả phần đã được giãn ra lấp chỗ trống)
+    function renderedWidths(t, info) {
+      const w = currentWidths(t, info);
+      for (let c = 0; c < info.numCols; c++) if (info.leaf[c]) w[c] = Math.max(40, info.leaf[c].offsetWidth);
+      return w;
+    }
+    function boxOf(t) { const h = holderOf(t); return (h === t) ? t.parentElement : h; }
+
+    // Nếu tổng độ rộng các cột < bề ngang khung chứa -> chia phần dư cho các cột còn lại
+    // (trừ 2 cột cố định STT/LSX của bảng Thời gian GC) để KHÔNG còn khoảng trắng bên phải.
+    function fitTable(t) {
+      const base = t._rsBase;
+      if (!base || !t.isConnected) return;
+      const info = headerInfo(t);
+      const box = boxOf(t);
+      if (!info || !box || base.length !== info.numCols) return;
+      const cs = getComputedStyle(box);
+      const avail = box.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+      const w = base.slice();
+      const sum = w.reduce(function(a, b) { return a + b; }, 0);
+      if (avail > sum) {
+        const flex = [];
+        let flexSum = 0;
+        for (let c = 0; c < info.numCols; c++) {
+          const th = info.leaf[c];
+          if (th && String(th.className).indexOf('tgGc-stcol') !== -1) continue;
+          flex.push(c); flexSum += base[c];
+        }
+        if (flexSum > 0) {
+          const k = (avail - sum) / flexSum;
+          let used = 0;
+          flex.forEach(function(c) { w[c] = Math.floor(base[c] * (1 + k)); used += w[c] - base[c]; });
+          if (flex.length) w[flex[flex.length - 1]] += Math.max(0, Math.floor(avail - sum - used));
+        }
+      }
+      applyWidths(t, info, w);
+      afterResize(t);
+    }
+    const rsObserver = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(function(entries) {
+      entries.forEach(function(en) {
+        en.target.querySelectorAll('table').forEach(function(t) {
+          if (t._rsBase) requestAnimationFrame(function() { fitTable(t); });
+        });
+      });
+    }) : null;
+
     function afterResize(t) {
       const h = holderOf(t);
       if (h && h.id === 'result' && typeof applyStickyColumn === 'function') applyStickyColumn();
@@ -12198,6 +12257,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       if (cg) cg.remove();
       t.classList.remove('rs-fixed');
       t.style.width = ''; t.style.minWidth = '';
+      t._rsBase = null;
       delete store[keyOf(t)];
       persist();
       afterResize(t);
@@ -12214,7 +12274,8 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         const info = headerInfo(t);
         if (!info) return;
         const z = zoomOf(t);
-        const widths = currentWidths(t, info);
+        t._rsBase = null; // đang kéo tay -> tạm tắt tự giãn
+        const widths = renderedWidths(t, info);
         applyWidths(t, info, widths);
         const cg = t.querySelector(':scope > colgroup.rs-cg');
         const startX = e.clientX, startW = widths[c];
@@ -12239,7 +12300,8 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           info.labels.forEach(function(lb, i) { map[lb] = widths[i]; });
           store[keyOf(t)] = map;
           persist();
-          afterResize(t);
+          t._rsBase = widths.slice();
+          fitTable(t); // các cột còn lại tự giãn lấp chỗ trống
         }
         hd.addEventListener('pointermove', onMove);
         hd.addEventListener('pointerup', onUp);
@@ -12268,8 +12330,10 @@ window.addEventListener('online', tryFlushPriorityQueue_);
         const widths = info.labels.map(function(lb, c) {
           return saved[lb] !== undefined ? saved[lb] : Math.max(90, info.leaf[c] ? info.leaf[c].offsetWidth : 90);
         });
-        applyWidths(t, info, widths);
-        afterResize(t);
+        t._rsBase = widths.slice();
+        fitTable(t);
+        const box = boxOf(t);
+        if (rsObserver && box && !box._rsRO) { box._rsRO = true; rsObserver.observe(box); } // đổi cỡ cửa sổ/thu gọn sidebar cũng tự căn lại
       }
     }
 
@@ -12294,6 +12358,446 @@ window.addEventListener('online', tryFlushPriorityQueue_);
     document.querySelectorAll('table').forEach(processTable);
   })();
   </script>
+
+  <script>
+/* =====================================================================
+   EXCEL-LIKE GRID + TỰ LÀM MỚI (khối bổ sung)
+   ===================================================================== */
+
+/* ---------- Tiện ích dùng chung ---------- */
+function xgIsEmpty_(s) { s = String(s == null ? '' : s).trim(); return s === '' || s === '-'; }
+function xgCellText_(td) {
+  const inp = td.querySelector('input:not([type=checkbox]), textarea');
+  return inp ? inp.value : (td.textContent || '');
+}
+function xgNum_(t) {
+  const s = String(t == null ? '' : t).trim().replace(/\s/g, '');
+  if (!/^-?\d+([.,]\d+)?$/.test(s)) return null;
+  return Number(s.replace(',', '.'));
+}
+function xgIsTab_(id) { const el = document.getElementById(id); return !!el && el.classList.contains('active'); }
+
+/* Thuật toán Ctrl+Mũi tên của Excel (empty(r,c) = ô trống?) */
+function xgJumpCore_(empty, r, c, dr, dc, r1, r2, c1, c2) {
+  const inb = function(rr, cc) { return rr >= r1 && rr <= r2 && cc >= c1 && cc <= c2; };
+  let nr = r + dr, nc = c + dc;
+  if (!inb(nr, nc)) return { r: r, c: c };
+  if (!empty(r, c) && !empty(nr, nc)) {
+    while (inb(nr + dr, nc + dc) && !empty(nr + dr, nc + dc)) { nr += dr; nc += dc; }
+    return { r: nr, c: nc };
+  }
+  while (inb(nr, nc) && empty(nr, nc)) { nr += dr; nc += dc; }
+  if (!inb(nr, nc)) { nr -= dr; nc -= dc; }
+  return { r: nr, c: nc };
+}
+
+/* ---------- Thanh "Đã chọn / Tổng" dùng chung ---------- */
+let xgRoot_ = null;
+function xgBar_() {
+  let b = document.getElementById('xgStatusBar');
+  if (!b) { b = document.createElement('div'); b.id = 'xgStatusBar'; document.body.appendChild(b); }
+  return b;
+}
+function xgHideStats_() {
+  const b = document.getElementById('xgStatusBar');
+  if (b) b.style.display = 'none';
+  xgRoot_ = null;
+}
+function xgUpdateStats_(root) {
+  if (!root) { xgHideStats_(); return; }
+  const cells = root.querySelectorAll('td.cell-selected');
+  if (cells.length < 2) { xgHideStats_(); return; }
+  xgRoot_ = root;
+  let sum = 0, has = false;
+  cells.forEach(function(td) {
+    const v = xgNum_(xgCellText_(td));
+    if (v !== null) { has = true; sum += v; }
+  });
+  const b = xgBar_();
+  b.innerHTML = '<span>Đã chọn: <b>' + cells.length + '</b> ô</span>' +
+    (has ? '<span>Tổng: <b>' + (Math.round(sum * 1e6) / 1e6).toLocaleString('vi-VN') + '</b></span>' : '');
+  b.style.display = 'flex';
+}
+// Bảng bị vẽ lại / mất vùng chọn -> tự ẩn thanh
+setInterval(function() {
+  if (xgRoot_ && (!xgRoot_.isConnected || !xgRoot_.querySelector('td.cell-selected'))) xgHideStats_();
+}, 700);
+
+/* Gắn thanh thống kê vào các bảng ĐÃ CÓ bộ chọn ô riêng */
+function xgWrap_(name, rootFn) {
+  const orig = window[name];
+  if (typeof orig !== 'function') return;
+  window[name] = function() {
+    const res = orig.apply(this, arguments);
+    xgUpdateStats_(rootFn.apply(null, arguments));
+    return res;
+  };
+}
+xgWrap_('dashPaintSelection_',   function() { return document.getElementById('dashboardResult'); });
+xgWrap_('dashClearSelection_',   function() { return document.getElementById('dashboardResult'); });
+xgWrap_('tgGcPaintSelection_',   function() { return document.getElementById('tgGcTableWrap'); });
+xgWrap_('tgGcClearSelection_',   function() { return document.getElementById('tgGcTableWrap'); });
+xgWrap_('bcgcPaint_',            function(loai) { return document.getElementById('bcgcTableWrap-' + loai); });
+xgWrap_('khbusPaintSelection_',  function() { return document.getElementById('khbusSlideCanvas'); });
+xgWrap_('khbusClearSelection_',  function() { return document.getElementById('khbusSlideCanvas'); });
+(function() {
+  const origSwitch = window.switchTab;
+  window.switchTab = function() { xgHideStats_(); return origSwitch.apply(this, arguments); };
+})();
+
+/* ---------- BỘ CHỌN Ô KIỂU EXCEL cho các bảng "thường" ---------- */
+(function initExcelGridEngine_() {
+  const SEL = '#vtResultWrap table, #ghResultWrap table, #nsListTable, #nsTangCaTable, ' +
+              '#nsChuNhatTable, #nsMonthlyAbsentTable, #lsxDetailTable';
+  const store = new WeakMap();
+  let cur = null; // bảng đang thao tác
+
+  function S(t) {
+    let s = store.get(t);
+    if (!s) { s = { regs: [], ar: -1, ac: -1, r: -1, c: -1, drag: false, painted: [] }; store.set(t, s); }
+    return s;
+  }
+  function tableOf(el) {
+    const t = el && el.closest ? el.closest('table') : null;
+    return (t && t.matches(SEL)) ? t : null;
+  }
+  function cell(t, r, c) { const row = t.rows[r]; return row ? row.cells[c] : null; }
+  function bounds(t) {
+    let r1 = 0;
+    while (t.rows[r1] && t.rows[r1].cells[0] && t.rows[r1].cells[0].tagName === 'TH') r1++;
+    const first = t.rows[r1];
+    const empty = !first || (first.cells[0] && first.cells[0].classList.contains('empty-state-cell'));
+    return { r1: r1, r2: t.rows.length - 1, c1: 0, c2: empty ? -1 : first.cells.length - 1 };
+  }
+  function inSel(s, r, c) {
+    return s.regs.some(function(g) { return r >= g.r1 && r <= g.r2 && c >= g.c1 && c <= g.c2; });
+  }
+  function paint(t) {
+    const s = S(t);
+    s.painted.forEach(function(td) { td.classList.remove('cell-selected', 'cell-active'); });
+    s.painted = [];
+    s.regs.forEach(function(g) {
+      for (let r = g.r1; r <= g.r2; r++) for (let c = g.c1; c <= g.c2; c++) {
+        const td = cell(t, r, c);
+        if (td && td.tagName === 'TD') { td.classList.add('cell-selected'); s.painted.push(td); }
+      }
+    });
+    const a = cell(t, s.r, s.c);
+    if (a && a.tagName === 'TD') { a.classList.add('cell-active'); s.painted.push(a); }
+    xgUpdateStats_(t);
+  }
+  function single(t, r, c) {
+    const s = S(t);
+    s.regs = [{ r1: r, r2: r, c1: c, c2: c }]; s.ar = r; s.ac = c; s.r = r; s.c = c;
+    paint(t);
+  }
+  function extend(t, r, c) {
+    const s = S(t);
+    if (s.ar < 0) { single(t, r, c); return; }
+    const g = { r1: Math.min(s.ar, r), r2: Math.max(s.ar, r), c1: Math.min(s.ac, c), c2: Math.max(s.ac, c) };
+    if (s.regs.length === 0) s.regs.push(g); else s.regs[s.regs.length - 1] = g;
+    s.r = r; s.c = c;
+    paint(t);
+  }
+  function toggle(t, r, c) {
+    const s = S(t);
+    const i = s.regs.findIndex(function(g) { return g.r1 === r && g.r2 === r && g.c1 === c && g.c2 === c; });
+    if (i !== -1) s.regs.splice(i, 1); else s.regs.push({ r1: r, r2: r, c1: c, c2: c });
+    s.ar = r; s.ac = c; s.r = r; s.c = c;
+    paint(t);
+  }
+  function clearSel(t) {
+    const s = S(t);
+    s.regs = []; s.ar = s.ac = s.r = s.c = -1;
+    paint(t);
+  }
+  function move(t, r, c, ext) {
+    const b = bounds(t);
+    r = Math.max(b.r1, Math.min(r, b.r2));
+    c = Math.max(b.c1, Math.min(c, b.c2));
+    if (ext) extend(t, r, c); else single(t, r, c);
+    const td = cell(t, r, c);
+    if (td && td.scrollIntoView) td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  function copy(t) {
+    const s = S(t);
+    if (!s.regs.length) return;
+    let r1 = Infinity, r2 = -Infinity, c1 = Infinity, c2 = -Infinity;
+    s.regs.forEach(function(g) { r1 = Math.min(r1, g.r1); r2 = Math.max(r2, g.r2); c1 = Math.min(c1, g.c1); c2 = Math.max(c2, g.c2); });
+    const lines = [];
+    for (let r = r1; r <= r2; r++) {
+      const vals = [];
+      for (let c = c1; c <= c2; c++) {
+        const td = cell(t, r, c);
+        vals.push(td && inSel(s, r, c) ? xgCellText_(td).replace(/[\t\r\n]+/g, ' ').trim() : '');
+      }
+      lines.push(vals.join('\t'));
+    }
+    writeToRealClipboard_(lines.join('\n'));
+    showToast('Đã copy ' + ((r2 - r1 + 1) * (c2 - c1 + 1)) + ' ô.', 'success');
+  }
+
+  document.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    const t = tableOf(e.target);
+    if (!t) { cur = null; return; }
+    cur = t;
+    const td = e.target.closest('td');
+    if (!td || td.classList.contains('empty-state-cell')) return;
+    if (e.target.closest('input, textarea, select, button, a')) return;
+    t.classList.add('xg-table');
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    const s = S(t), r = td.parentNode.rowIndex, c = td.cellIndex;
+    if (e.shiftKey) { extend(t, r, c); s.drag = false; }
+    else if (e.ctrlKey || e.metaKey) { toggle(t, r, c); s.drag = false; }
+    else { s.drag = true; single(t, r, c); }
+    e.preventDefault();
+  });
+  document.addEventListener('mouseover', function(e) {
+    if (!cur) return;
+    const s = S(cur);
+    if (!s.drag) return;
+    const td = e.target.closest ? e.target.closest('td') : null;
+    if (td && td.closest('table') === cur && !td.classList.contains('empty-state-cell')) {
+      extend(cur, td.parentNode.rowIndex, td.cellIndex);
+    }
+  });
+  document.addEventListener('mouseup', function() { if (cur) S(cur).drag = false; });
+
+  window.addEventListener('keydown', function(e) {
+    if (!cur || !cur.isConnected || !cur.offsetParent) return;
+    const tg = e.target;
+    if (tg && (/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName) || tg.isContentEditable)) return;
+    const s = S(cur), b = bounds(cur);
+    if (b.c2 < 0 || b.r2 < b.r1) return;
+    const ctrl = e.ctrlKey || e.metaKey, k = e.key;
+    let handled = true;
+    if (ctrl && k.toLowerCase() === 'c') copy(cur);
+    else if (ctrl && k.toLowerCase() === 'a') { single(cur, b.r1, b.c1); extend(cur, b.r2, b.c2); }
+    else if (ctrl) handled = false; // Ctrl+Mũi tên để bộ xử lý chung bên dưới lo
+    else if (k === 'Escape') clearSel(cur);
+    else if (s.r >= 0 && /^(ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Enter|Tab)$/.test(k)) {
+      let dr = 0, dc = 0;
+      if (k === 'ArrowDown') dr = 1; else if (k === 'ArrowUp') dr = -1;
+      else if (k === 'ArrowRight') dc = 1; else if (k === 'ArrowLeft') dc = -1;
+      else if (k === 'Enter') dr = e.shiftKey ? -1 : 1;
+      else if (k === 'Tab') dc = e.shiftKey ? -1 : 1;
+      move(cur, s.r + dr, s.c + dc, e.shiftKey && k.indexOf('Arrow') === 0);
+    } else handled = false;
+    if (handled) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+
+  // Ctrl+Mũi tên cho bảng thường (được gọi từ bộ xử lý chung)
+  window.xgGenericJump_ = function(dr, dc, ext) {
+    if (!cur || !cur.isConnected || !cur.offsetParent) return false;
+    const s = S(cur), b = bounds(cur);
+    if (s.r < 0 || b.c2 < 0 || b.r2 < b.r1) return false;
+    const t = cur;
+    const p = xgJumpCore_(function(r, c) { const td = cell(t, r, c); return !td || xgIsEmpty_(xgCellText_(td)); },
+      s.r, s.c, dr, dc, b.r1, b.r2, b.c1, b.c2);
+    move(t, p.r, p.c, ext);
+    return true;
+  };
+})();
+
+/* ---------- Ctrl + Mũi tên (như Excel) cho MỌI bảng ---------- */
+const XG_ADAPTERS_ = [
+  { // Up BOM (dữ liệu dạng mảng)
+    ok: function() { return admPageOpen_() && admMode_ === 'up' && !admUpEditing_ && !!admUpAct_; },
+    cur: function() { return [admUpAct_.r, admUpAct_.c]; },
+    bounds: function() { return { r1: 0, r2: admUpRows_.length - 1, c1: 0, c2: ADM_UP_COLS_.length - 1 }; },
+    empty: function(r, c) { return xgIsEmpty_(admUpRows_[r] ? admUpRows_[r][c] : ''); },
+    one: function(r, c) { admUpMove_(r, c); }, ext: function(r, c) { admUpExtend_(r, c); }
+  },
+  { // Tra cứu
+    ok: function() { return xgIsTab_('tab-checkdon') && activeR >= 0; },
+    root: '#result', cur: function() { return [activeR, activeC]; },
+    one: function(r, c) { selectSingle(r, c); }, ext: function(r, c) { extendSelection(r, c); }
+  },
+  { // Dashboard - Tiến độ
+    ok: function() {
+      const p = document.getElementById('dashSubTab-tiendo');
+      return xgIsTab_('tab-dashboard') && p && p.style.display !== 'none' && dashActiveR >= 0;
+    },
+    root: '#dashboardResult', cur: function() { return [dashActiveR, dashActiveC]; },
+    one: function(r, c) { dashSelectSingle_(r, c); }, ext: function(r, c) { dashExtendSelection_(r, c); }
+  },
+  { // Dashboard - Thời gian gia công
+    ok: function() {
+      const p = document.getElementById('dashSubTab-thoigian');
+      return xgIsTab_('tab-dashboard') && p && p.style.display !== 'none' && tgGcActiveR >= 0;
+    },
+    root: '#tgGcTableWrap', cur: function() { return [tgGcActiveR, tgGcActiveC]; },
+    one: function(r, c) { tgGcSelectSingle_(r, c); }, ext: function(r, c) { tgGcExtendSelection_(r, c); }
+  },
+  { // Báo cáo GC
+    ok: function() { const l = bcgcActiveType_(); return xgIsTab_('tab-baocaogc') && !!l && bcgcSel_[l].r >= 0; },
+    root: function() { return '#bcgcTableWrap-' + bcgcActiveType_(); },
+    cur: function() { const s = bcgcSel_[bcgcActiveType_()]; return [s.r, s.c]; },
+    one: function(r, c) { bcgcSelSingle_(bcgcActiveType_(), r, c); },
+    ext: function(r, c) { bcgcSelExtend_(bcgcActiveType_(), r, c); }
+  },
+  { // KH BUS
+    ok: function() { return xgIsTab_('tab-khbus') && khbusActiveR >= 0; },
+    root: '#khbusSlideCanvas', cur: function() { return [khbusActiveR, khbusActiveC]; },
+    one: function(r, c) { khbusSelectSingle_(r, c); }, ext: function(r, c) { khbusExtendSelection_(r, c); }
+  }
+];
+
+// Gom các ô có data-r/data-c; bỏ qua cột bị ẩn (không có trong DOM) để nhảy đúng như Excel
+function xgDomGrid_(rootSel) {
+  const root = document.querySelector(rootSel);
+  if (!root) return null;
+  const map = {}, rs = {}, cs = {};
+  root.querySelectorAll('td[data-r]').forEach(function(td) {
+    const r = +td.getAttribute('data-r'), c = +td.getAttribute('data-c');
+    map[r + '_' + c] = td; rs[r] = 1; cs[c] = 1;
+  });
+  const asc = function(a, b) { return a - b; };
+  return { map: map, R: Object.keys(rs).map(Number).sort(asc), C: Object.keys(cs).map(Number).sort(asc) };
+}
+
+window.addEventListener('keydown', function(e) {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || String(e.key).indexOf('Arrow') !== 0) return;
+  const tg = e.target;
+  if (tg && (/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName) || tg.isContentEditable)) return;
+  const dr = e.key === 'ArrowDown' ? 1 : (e.key === 'ArrowUp' ? -1 : 0);
+  const dc = e.key === 'ArrowRight' ? 1 : (e.key === 'ArrowLeft' ? -1 : 0);
+  const done = function() { e.preventDefault(); e.stopImmediatePropagation(); };
+
+  if (window.xgGenericJump_ && window.xgGenericJump_(dr, dc, e.shiftKey)) { done(); return; }
+
+  for (let i = 0; i < XG_ADAPTERS_.length; i++) {
+    const a = XG_ADAPTERS_[i];
+    let ok = false;
+    try { ok = a.ok(); } catch (er) { ok = false; }
+    if (!ok) continue;
+    if (!a.bounds && admPageOpen_()) continue; // đang mở trang Quản trị BOM -> không điều khiển bảng phía sau
+
+    if (a.bounds) {
+      const b = a.bounds(), c0 = a.cur();
+      const p = xgJumpCore_(a.empty, c0[0], c0[1], dr, dc, b.r1, b.r2, b.c1, b.c2);
+      if (e.shiftKey) a.ext(p.r, p.c); else a.one(p.r, p.c);
+      done(); return;
+    }
+    const rootSel = (typeof a.root === 'function') ? a.root() : a.root;
+    const g = xgDomGrid_(rootSel);
+    if (!g || !g.R.length) continue;
+    const c0 = a.cur();
+    const ri = g.R.indexOf(c0[0]), ci = g.C.indexOf(c0[1]);
+    if (ri < 0 || ci < 0) continue;
+    const p = xgJumpCore_(function(r, c) {
+      const td = g.map[g.R[r] + '_' + g.C[c]];
+      return !td || xgIsEmpty_(xgCellText_(td));
+    }, ri, ci, dr, dc, 0, g.R.length - 1, 0, g.C.length - 1);
+    const rr = g.R[p.r], cc = g.C[p.c];
+    if (e.shiftKey) a.ext(rr, cc); else a.one(rr, cc);
+    const td = g.map[rr + '_' + cc];
+    if (td && td.scrollIntoView) td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    done(); return;
+  }
+}, true);
+
+/* ---------- MỤC 1: TỰ LÀM MỚI KHI SHEET -> SUPABASE ĐỒNG BỘ XONG ---------- */
+let syncStampsLast_ = null;
+const SYNC_WATCH_MS_ = 60000; // chỉ còn là dự phòng, Realtime lo phần tức thời
+
+function silentRefreshTraCuu_() {
+  if (!currentQuery || currentQueryMode !== 'lsx' || isSearching) return;
+  if (!xgIsTab_('tab-checkdon')) return;
+  google.script.run
+    .withSuccessHandler(function(rows) {
+      if (!rows) return;
+      if (rows.length !== lastRows.length) { lastRows = rows; render(applyFilters(rows)); }
+      else mergeRemoteChanges(rows); // chỉ cập nhật ô VT/GH/NMK/Ghi chú đổi, không mất vị trí cuộn
+    })
+    .withFailureHandler(function() {})
+    .searchByLSX(currentQuery);
+}
+
+function bcgcRefreshSilently_(loai) {
+  const st = baoCaoGcState_[loai];
+  if (!st || !st.loaded || !st.lastTokens) return;
+  bcgcFetchDirect_(loai, st.lastTokens).then(function(rows) {
+    if (JSON.stringify(rows) === JSON.stringify(st.rows)) return;
+    st.rows = rows;
+    renderBaoCaoGcTable_(loai);
+  }).catch(function() {});
+}
+
+function pollSyncStamps_() {
+  if (document.hidden || typeof currentUser_ === 'undefined' || !currentUser_) return;
+  google.script.run
+    .withSuccessHandler(function(s) {
+      if (!s) return;
+      const prev = syncStampsLast_;
+      syncStampsLast_ = s;
+      if (!prev) return; // lần đầu chỉ ghi mốc
+      const changed = function(k) { return s[k] !== prev[k]; };
+
+      ['bom', 'tiendo', 'vt', 'gh', 'bcgc_tien', 'bcgc_phay', 'bcgc_nguoi'].forEach(function(k) {
+        if (changed(k)) handleSyncSignal_(k);
+      });
+    })
+    .withFailureHandler(function() {})
+    .getSyncStamps();
+}
+setInterval(pollSyncStamps_, SYNC_WATCH_MS_);
+document.addEventListener('visibilitychange', function() { if (!document.hidden) pollSyncStamps_(); });
+</script>
+
+<script>
+/* ===== REALTIME: nhận "chuông báo" từ bảng sync_signals ===== */
+const syncPending_ = new Set();
+let syncTimer_ = null;
+
+// Gom nhiều tín hiệu đến sát nhau thành 1 lần làm mới; trễ ngẫu nhiên 0,8–4,8s
+// để hàng chục máy không cùng gọi server một lúc.
+function handleSyncSignal_(name) {
+  syncPending_.add(name);
+  if (syncTimer_) return;
+  syncTimer_ = setTimeout(function() {
+    const names = Array.from(syncPending_);
+    syncPending_.clear();
+    syncTimer_ = null;
+    if (document.hidden) return; // tab đang ẩn: khi mở lại, polling sẽ tự bù
+    const has = function(n) { return names.indexOf(n) !== -1; };
+
+    if (has('bom')) { refreshSyncStatus(); silentRefreshTraCuu_(); }
+    if (has('bom') || has('tiendo')) refreshDashboardSilently_();
+    if (has('vt') && xgIsTab_('tab-nhanvattu')) loadVtData_();
+    if (has('gh') && xgIsTab_('tab-giaohang2')) loadGhData2_();
+    ['tien', 'phay', 'nguoi'].forEach(function(l) {
+      if (has('bcgc_' + l)) bcgcRefreshSilently_(l);
+    });
+  }, 800 + Math.random() * 4000);
+}
+
+let rtStarted_ = false;
+function startRealtime_() {
+  if (rtStarted_ || !window.supabase || typeof currentUser_ === 'undefined' || !currentUser_) return;
+  rtStarted_ = true;
+  try {
+    const client = window.supabase.createClient(SUPABASE_URL_DIRECT_, SUPABASE_ANON_KEY_, {
+      realtime: { params: { eventsPerSecond: 5 } }
+    });
+    client.channel('sync-signals')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_signals' }, function(p) {
+        if (p && p.new && p.new.name) handleSyncSignal_(p.new.name);
+      })
+      .subscribe(function(status) {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Realtime:', status);
+      });
+  } catch (err) {
+    rtStarted_ = false;
+    console.warn('Không bật được Realtime:', err);
+  }
+}
+// Chờ đăng nhập xong mới kết nối (không cần sửa finishLogin_)
+setInterval(startRealtime_, 2000);
+</script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
