@@ -1503,6 +1503,20 @@ body.dark-mode #xgStatusBar b { color: #8fc1ff; }
     }
 
     function callServer_(fnName, args, retriesLeft, reqId) {
+      // Các lệnh CHỈ ĐỌC: gọi thẳng Supabase, không tốn hạn mức UrlFetch của Apps Script.
+      // Nếu đọc thẳng lỗi (VD thiếu quyền đọc) thì tự chuyển về đường cũ qua Apps Script.
+      const direct = window.DIRECT_READS_ && window.DIRECT_READS_[fnName];
+      if (direct) {
+        return direct.apply(null, args || []).catch(function(err) {
+          if (err && err.noFallback) throw err;
+          console.warn('Đọc trực tiếp Supabase lỗi, chuyển sang Apps Script:', fnName, err);
+          return callServerViaApi_(fnName, args, retriesLeft, reqId);
+        });
+      }
+      return callServerViaApi_(fnName, args, retriesLeft, reqId);
+    }
+
+    function callServerViaApi_(fnName, args, retriesLeft, reqId) {
       if (retriesLeft === undefined) retriesLeft = (fnName === 'adminDeleteBom' || fnName === 'adminUpBom') ? 0 : 1;
       if (!reqId) reqId = newReqId_(); // GIỮ NGUYÊN khi retry -> server nhận ra là cùng 1 lệnh, không ghi trùng
       if (Date.now() < quotaBlockedUntil_ && QUOTA_SILENT_FUNCTIONS_.indexOf(fnName) !== -1) {
@@ -12795,6 +12809,124 @@ function startRealtime_() {
 }
 // Chờ đăng nhập xong mới kết nối (không cần sửa finishLogin_)
 setInterval(startRealtime_, 2000);
+
+</script>
+
+<script>
+/* ===== ĐỌC THẲNG SUPABASE (không tốn hạn mức Apps Script) ===== */
+async function xgFetchAll_(path) {
+  let all = [], from = 0;
+  while (true) {
+    const res = await fetch(SUPABASE_URL_DIRECT_ + '/rest/v1/' + path, {
+      headers: Object.assign({ Range: from + '-' + (from + 999), 'Range-Unit': 'items', Prefer: 'count=exact' }, supabaseHeaders_())
+    });
+    if (res.status === 416) break;
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    if (!rows.length) break;
+    all = all.concat(rows);
+    from += rows.length;
+    const m = (res.headers.get('Content-Range') || '').match(/\/(\d+)$/);
+    if (m && from >= Number(m[1])) break;
+  }
+  return all;
+}
+
+function xgCleanTokens_(raw, minLen) {
+  return String(raw || '').split(/[,;\s]+/)
+    .map(function(s) { return s.trim().replace(/[^\w.\/\-À-ỹ]/g, ''); })
+    .filter(function(s) { return s.length >= minLen; });
+}
+
+window.DIRECT_READS_ = {
+  // Tra cứu theo LSX
+  searchByLSX: function(lsx) {
+    const tokens = xgCleanTokens_(lsx, 3);
+    if (tokens.length === 0) {
+      const e = new Error('Từ khóa tìm kiếm quá ngắn, vui lòng nhập đầy đủ LSX (kiểm tra lại dấu "/").');
+      e.noFallback = true;
+      return Promise.reject(e);
+    }
+    const filter = tokens.length === 1
+      ? 'lsx=ilike.*' + encodeURIComponent(tokens[0]) + '*'
+      : 'or=(' + tokens.map(function(t) { return 'lsx.ilike.*' + encodeURIComponent(t) + '*'; }).join(',') + ')';
+    return xgFetchAll_('bom_giao_viec?' + filter + '&select=*&order=thu_tu.asc');
+  },
+
+  // Tra cứu theo loại đơn (BUS, GHE...)
+  searchByPrefix: function(prefix) {
+    const p = String(prefix || '').replace(/[^A-Za-z]/g, '').toUpperCase();
+    if (!p) { const e = new Error('Tiền tố không hợp lệ.'); e.noFallback = true; return Promise.reject(e); }
+    return xgFetchAll_('bom_giao_viec?lsx=like.' + encodeURIComponent(p + '.') + '*&select=*&order=thu_tu.asc');
+  },
+
+  // Gợi ý LSX khi đang gõ
+  suggestLSX: function(query) {
+    const q = xgCleanTokens_(query, 3)[0];
+    if (!q) return Promise.resolve([]);
+    return fetch(SUPABASE_URL_DIRECT_ + '/rest/v1/bom_giao_viec?lsx=ilike.*' + encodeURIComponent(q) +
+      '*&select=lsx&order=lsx.asc&limit=300', { headers: supabaseHeaders_() })
+      .then(function(res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+      .then(function(rows) {
+        const seen = {}, out = [];
+        rows.forEach(function(r) { if (r.lsx && !seen[r.lsx]) { seen[r.lsx] = true; out.push(r.lsx); } });
+        return out.slice(0, 10);
+      });
+  },
+
+  // Thông báo
+  getNotifications: function(afterId) {
+    const id = Number(afterId) || 0;
+    return fetch(SUPABASE_URL_DIRECT_ + '/rest/v1/notifications?id=gt.' + id + '&select=*&order=id.desc&limit=100',
+      { headers: supabaseHeaders_() })
+      .then(function(res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+      .then(function(rows) { return rows.reverse(); });
+  },
+
+  // Dashboard
+  getDashboardData: async function() {
+    const cols = 'thu_tu,lsx,loai,hang_muc,ngay_giao,kho_giao_hang_percent,tien_do_don_hang,tinh_trang,' +
+      'duc_nhom_tien_do,duc_nhom_tong,duc_nhom_gc,duc_nhom_con_lai,' +
+      'cua_vong_tien_do,cua_vong_tong,cua_vong_gc,cua_vong_con_lai,' +
+      'tien_tien_do,tien_tong,tien_gc,tien_con_lai,' +
+      'phay_tien_do,phay_tong,phay_gc,phay_con_lai,' +
+      'nguoi_tien_do,nguoi_tong,nguoi_gc,nguoi_con_lai,' +
+      'nhiet_tien_do,nhiet_tong,nhiet_gc,nhiet_con_lai,ngay_hoan_thanh';
+    const res3 = await Promise.all([
+      xgFetchAll_('tien_do_don_hang?select=' + cols + '&order=thu_tu.asc'),
+      xgFetchAll_('kho_gh_completion?select=lsx,ngay_hoan_thanh'),
+      xgFetchAll_('tien_do_completion?select=lsx,ngay_hoan_thanh')
+    ]);
+    const ghMap = {}, tdMap = {};
+    res3[1].forEach(function(r) { if (r.lsx) ghMap[r.lsx] = r.ngay_hoan_thanh; });
+    res3[2].forEach(function(r) { if (r.lsx) tdMap[r.lsx] = r.ngay_hoan_thanh; });
+    const pct = function(v) {
+      const n = Number(v);
+      return (v === null || v === undefined || v === '' || isNaN(n)) ? 0 : Math.round(n * 100);
+    };
+    const typeOf = function(lsx) {
+      const m = String(lsx || '').match(/^([A-Za-zÀ-ỹ]+)\./);
+      return m ? m[1].toUpperCase() : 'KPH';
+    };
+    return res3[0].map(function(r) {
+      return {
+        lsx: r.lsx, loai: r.loai || typeOf(r.lsx), sanPham: r.hang_muc || '', khgh: r.ngay_giao,
+        percent: pct(r.kho_giao_hang_percent), tienDoPercent: pct(r.tien_do_don_hang),
+        total: null, delivered: null, tienDoDonHang: r.tien_do_don_hang, tinhTrang: r.tinh_trang,
+        ngayHoanThanh: pct(r.tien_do_don_hang) >= 100 ? (tdMap[r.lsx] || r.ngay_hoan_thanh || null) : null,
+        ngayHoanThanhKhoGh: pct(r.kho_giao_hang_percent) >= 100 ? (ghMap[r.lsx] || null) : null,
+        chuyen: {
+          ducNhom: { td: r.duc_nhom_tien_do, tong: r.duc_nhom_tong, gc: r.duc_nhom_gc, con: r.duc_nhom_con_lai },
+          cuaVong: { td: r.cua_vong_tien_do, tong: r.cua_vong_tong, gc: r.cua_vong_gc, con: r.cua_vong_con_lai },
+          tien:    { td: r.tien_tien_do,     tong: r.tien_tong,     gc: r.tien_gc,     con: r.tien_con_lai },
+          phay:    { td: r.phay_tien_do,     tong: r.phay_tong,     gc: r.phay_gc,     con: r.phay_con_lai },
+          nguoi:   { td: r.nguoi_tien_do,    tong: r.nguoi_tong,    gc: r.nguoi_gc,    con: r.nguoi_con_lai },
+          nhiet:   { td: r.nhiet_tien_do,    tong: r.nhiet_tong,    gc: r.nhiet_gc,    con: r.nhiet_con_lai }
+        }
+      };
+    }).filter(function(g) { return !!(g.lsx && String(g.lsx).trim()); });
+  }
+};
 </script>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
