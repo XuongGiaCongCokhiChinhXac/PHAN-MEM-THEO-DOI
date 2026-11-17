@@ -12784,7 +12784,7 @@ function handleSyncSignal_(name) {
     ['tien', 'phay', 'nguoi'].forEach(function(l) {
       if (has('bcgc_' + l)) bcgcRefreshSilently_(l);
     });
-  }, 800 + Math.random() * 4000);
+  }, 300 + Math.random() * 1200);
 }
 
 let rtStarted_ = false;
