@@ -1458,6 +1458,31 @@ body.dark-mode #xgStatusBar b { color: #8fc1ff; }
 .xg-table { user-select: none; }
 @media (max-width: 768px) { #xgStatusBar { bottom: 66px; right: 8px; } }
 
+/* ===== Sidebar: tab đang chọn giống mục "Trang chủ" ===== */
+.sidebar { padding: 12px 10px; box-sizing: border-box; }
+.sidebar.collapsed { padding: 12px 6px; }
+.sidebar > div:first-child { padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #e3e6ea; }
+#sidebarTienDoGroup, #sidebarNhanSuGroup { gap: 4px; }
+.sidebar .sidebar-nav-btn,
+.sidebar .sidebar-toggle.sidebar-nav-btn {
+  width: 100%; box-sizing: border-box; padding: 10px 12px !important;
+  font-size: 13.5px; font-weight: 700; color: #1a73e8; background: transparent;
+  border: 0; border-left: 3px solid transparent; border-radius: 6px;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.sidebar .sidebar-nav-btn i { width: 18px; text-align: center; font-size: 14px; }
+.sidebar .sidebar-nav-btn:hover { background: #f2f6fd; transform: none; box-shadow: none; }
+.sidebar .sidebar-nav-btn.active {
+  background: #eaf2ff; color: #1a73e8; border-left-color: #1a73e8; font-weight: 800; box-shadow: none;
+}
+.sidebar.collapsed .sidebar-nav-btn { justify-content: center !important; padding: 11px 0 !important; }
+.sidebar .sidebar-toggle-bottom { margin-top: auto; border-radius: 6px; color: #6b7280; }
+.sidebar .sidebar-toggle-bottom:hover { color: #1a73e8; }
+
+body.dark-mode .sidebar > div:first-child { border-bottom-color: #2c313c; }
+body.dark-mode .sidebar .sidebar-nav-btn:hover { background: #23293a; }
+body.dark-mode .sidebar .sidebar-nav-btn.active { background: #1a2c4d; color: #fff; border-left-color: #8fc1ff; }
+
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   </head>
@@ -4902,7 +4927,7 @@ function saveVtGhBatch_() {
     .withSuccessHandler(function() {
       showToast('Đã lưu ' + items.length + ' món.', 'success');
       if (mode === 'nhanvattu') loadVtData_(); else loadGhData2_();
-      refreshDashboardSilently_(); // Server đã tự tính lại % -> Dashboard cập nhật ngay, không chờ đồng bộ
+      dashRefreshAfterVtGh_(items); // kéo ngay % tiến độ của các LSX vừa lưu
     })
     .withFailureHandler(function(err) { showToast('Lỗi lưu: ' + err.message, 'error'); })
     [fnName](items);
@@ -7688,11 +7713,16 @@ function onVtGhQrScanSuccess_(decodedText) {
         return res.json();
       }
 
-      async function pollDashboardLive_() {
-        if (dashLiveBusy_ || document.hidden || !currentUser_) return;
-        const tab = document.getElementById('tab-dashboard');
-        if (!tab || !tab.classList.contains('active')) return;
-        const lsxList = (dashboardVisibleRows_ || []).slice(0, 150).map(function(r) { return r.lsx; }).filter(Boolean);
+      async function pollDashboardLive_(forceList) {
+        if (!currentUser_) return;
+        if (!forceList) { // chạy định kỳ: chỉ khi đang xem Dashboard
+          if (dashLiveBusy_ || document.hidden) return;
+          const tab = document.getElementById('tab-dashboard');
+          if (!tab || !tab.classList.contains('active')) return;
+        }
+        const lsxList = (forceList && forceList.length)
+          ? forceList
+          : (dashboardVisibleRows_ || []).slice(0, 150).map(function(r) { return r.lsx; }).filter(Boolean);
         if (lsxList.length === 0) return;
 
         dashLiveBusy_ = true;
@@ -7745,7 +7775,30 @@ function onVtGhQrScanSuccess_(decodedText) {
         } catch (e) { /* im lặng, 15 giây sau tự thử lại */ }
         finally { dashLiveBusy_ = false; }
       }
-      setInterval(pollDashboardLive_, DASH_LIVE_POLL_MS);
+      setInterval(function() { pollDashboardLive_(); }, DASH_LIVE_POLL_MS);
+
+// Gõ LSX rút gọn ("710/08") -> dò ra LSX đầy đủ đang có trên Dashboard
+function dashResolveLsxList_(items) {
+  const out = {};
+  (items || []).forEach(function(it) {
+    const typed = String(it.lsx || '').trim();
+    if (!typed) return;
+    dashboardRows.forEach(function(r) {
+      const full = String(r.lsx || '');
+      if (full === typed || full.slice(-(typed.length + 1)) === '.' + typed) out[full] = true;
+    });
+  });
+  return Object.keys(out);
+}
+
+// Sau khi lưu: kéo ngay % của đúng các LSX vừa đổi, thử lại vài nhịp phòng trigger DB trễ
+function dashRefreshAfterVtGh_(items) {
+  const list = dashResolveLsxList_(items);
+  if (!list.length) { refreshDashboardSilently_(); return; }
+  [0, 2500, 6000, 12000].forEach(function(ms) {
+    setTimeout(function() { pollDashboardLive_(list); }, ms);
+  });
+}
 
       function renderProgressSyncStatus_(iso) {
         const el = document.getElementById('progressSyncStatus');
@@ -9376,18 +9429,22 @@ window.addEventListener('online', tryFlushPriorityQueue_);
 
         for (const k in lsxDetailFilters) delete lsxDetailFilters[k]; // mỗi lần mở LSX khác, bỏ lọc cũ
 
-        google.script.run
-          .withSuccessHandler(function(rows) {
+        const myReq_ = window.__lsxDetailReq = (window.__lsxDetailReq || 0) + 1;
+        xgFetchAll_('bom_giao_viec?lsx=eq.' + encodeURIComponent(lsx) + '&select=*&order=thu_tu.asc')
+          .then(function(rows) {
+            if (myReq_ !== window.__lsxDetailReq) return; // đã mở LSX khác
             rows = rows || [];
             renderLsxDetailSummary_(lsx, rows);
             lsxDetailRawRows = rows.filter(function(r) { return !r.giao_hang; });
             renderLsxDetailTable_(applyDetailFilters_(lsxDetailRawRows));
           })
-          .withFailureHandler(function(err) {
+          .catch(function(err) {
+            if (myReq_ !== window.__lsxDetailReq) return;
             document.getElementById('lsxDetailTable').innerHTML =
-              '<tr><td style="padding:20px; text-align:center; color:#c62828;">Lỗi: ' + err.message + '</td></tr>';
-          })
-          .searchByLSX(lsx);
+              '<tr><td style="padding:20px; text-align:center; color:#c62828;">Không tải được dữ liệu (' +
+              escapeHtml_(err.message) + '). <a href="javascript:void(0)" onclick="openLsxDetailModal_(' +
+              jsArg_(lsx) + ')" style="color:#1a73e8; font-weight:700;">Thử lại</a></td></tr>';
+          });
       }
 
       // Dòng thống kê: Tổng chi tiết / Đã giao / % Giao hàng / % Nhận VT, hiện ngay cạnh tiêu đề modal.
@@ -12706,7 +12763,14 @@ xgWrap_('khbusClearSelection_',  function() { return document.getElementById('kh
     if (ctrl && k.toLowerCase() === 'c') copy(cur);
     else if (ctrl && k.toLowerCase() === 'a') { single(cur, b.r1, b.c1); extend(cur, b.r2, b.c2); }
     else if (ctrl) handled = false; // Ctrl+Mũi tên để bộ xử lý chung bên dưới lo
-    else if (k === 'Escape') clearSel(cur);
+    else if (k === 'Escape') {
+      // Đang có modal mở, hoặc không có vùng chọn -> nhường ESC cho bộ đóng modal
+      const anyModal = Array.prototype.some.call(
+        document.querySelectorAll('.colvis-overlay, .pm-overlay'),
+        function(o) { return o.style.display !== 'none' && o.style.display !== ''; });
+      if (anyModal || S(cur).regs.length === 0) handled = false;
+      else clearSel(cur);
+    }
     else if (s.r >= 0 && /^(ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Enter|Tab)$/.test(k)) {
       let dr = 0, dc = 0;
       if (k === 'ArrowDown') dr = 1; else if (k === 'ArrowUp') dr = -1;
@@ -12957,8 +13021,8 @@ function xgCleanTokens_(raw, minLen) {
     .filter(function(s) { return s.length >= minLen; });
 }
 
-  // Tìm BOM để xóa (Quản trị BOM) - gọi thẳng Supabase, không qua Apps Script
-  // => không còn bị tính vào hạn mức UrlFetch của Google nữa
+window.DIRECT_READS_ = {
+  // Tìm BOM để xóa (Quản trị BOM) - đọc thẳng Supabase
   adminSearchBom: async function(lsxQuery) {
     const tokens = String(lsxQuery || '').split(/[,;\s]+/).map(function(s) { return s.trim(); })
       .filter(function(s) { return s.length >= 3 || /^[A-Za-z]{2}$/.test(s); });
@@ -12982,13 +13046,11 @@ function xgCleanTokens_(raw, minLen) {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const rows = await res.json();
-    const cr = res.headers.get('Content-Range') || '';
-    const m = cr.match(/\/(\d+)$/);
+    const m = (res.headers.get('Content-Range') || '').match(/\/(\d+)$/);
     const total = m ? Number(m[1]) : rows.length;
     return { rows: rows, total: total, truncated: total > rows.length };
-  }
+  },
 
-window.DIRECT_READS_ = {
   // Tra cứu theo LSX
   searchByLSX: function(lsx) {
     const tokens = xgCleanTokens_(lsx, 3);
