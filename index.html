@@ -1890,11 +1890,12 @@ const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs_);
 
                 <div id="tab-nhanvattu" class="tab-pane">
           <div class="tracking-toolbar">
-            <h2>Nhận Vật Tư</h2>
             <div style="display:flex; gap:8px;">
-              <button type="button" class="btn-primary-blue" onclick="openVtGhModal_('nhanvattu')">
-                <i class="fa-solid fa-plus"></i> Nhận vật tư
+              <button type="button" class="quick-btn active" onclick="openVtGhStatsModal_('nhanvattu')" style="font-size:14px; padding:8px 16px;">
+                <i class="fa-solid fa-chart-column" style="margin-right:6px;"></i>Thống kê
               </button>
+            </div>
+            <div style="display:flex; gap:8px;">
               <button type="button" class="icon-btn" title="Chụp ảnh bảng đang xem" onclick="captureTableFromContainer_('vtResultWrap','NhanVatTu')"><i class="fa-solid fa-camera"></i></button>
               <button id="vtRefreshBtn" class="icon-btn" title="Làm mới" onclick="loadVtData_()"><i class="fa-solid fa-arrows-rotate"></i></button>
             </div>
@@ -2018,11 +2019,12 @@ const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs_);
 
         <div id="tab-giaohang2" class="tab-pane">
           <div class="tracking-toolbar">
-            <h2>Giao Hàng</h2>
             <div style="display:flex; gap:8px;">
-              <button type="button" class="btn-primary-blue" onclick="openVtGhModal_('giaohang')">
-                <i class="fa-solid fa-plus"></i> Giao hàng
+              <button type="button" class="quick-btn active" onclick="openVtGhStatsModal_('giaohang')" style="font-size:14px; padding:8px 16px;">
+                <i class="fa-solid fa-chart-column" style="margin-right:6px;"></i>Thống kê
               </button>
+            </div>
+            <div style="display:flex; gap:8px;">
               <button type="button" class="icon-btn" title="Chụp ảnh bảng đang xem" onclick="captureTableFromContainer_('ghResultWrap','GiaoHang')"><i class="fa-solid fa-camera"></i></button>
               <button id="ghRefreshBtn" class="icon-btn" title="Làm mới" onclick="loadGhData2_()"><i class="fa-solid fa-arrows-rotate"></i></button>
             </div>
@@ -4555,6 +4557,83 @@ let vtGhMode_ = 'nhanvattu'; // 'nhanvattu' | 'giaohang2'
 let vtGhQrScanner_ = null;
 let vtGhAutoFillReqId_ = 0;
 
+/* ================= THỐNG KÊ NHẬN VẬT TƯ / GIAO HÀNG ================= */
+function vtGhStatsFilterByDate_(rows, dateStr) {
+  return rows.filter(function(r) {
+    // r.ngay đang ở dạng 'dd/MM/yy HH:mm'
+    const m = String(r.ngay || '').match(/^(\d{2})\/(\d{2})\/(\d{2})/);
+    if (!m) return false;
+    const iso = '20' + m[3] + '-' + m[2] + '-' + m[1];
+    return iso === dateStr;
+  });
+}
+
+// Tách "MSNV - Tên" nếu app quét ghi theo định dạng này; nếu không, coi cả chuỗi là Tên.
+function vtGhStatsSplitPerson_(nguoi) {
+  const s = String(nguoi || '').trim();
+  const m = s.match(/^(\d{3,15})\s*[-–]\s*(.+)$/);
+  return m ? { msnv: m[1], ten: m[2] } : { msnv: '', ten: s };
+}
+
+function openVtGhStatsModal_() {
+  const today = new Date();
+  const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+  document.getElementById('vtGhStatsDateInput').value = todayStr;
+  document.getElementById('vtGhStatsOverlay').style.display = 'flex';
+  renderVtGhStats_();
+}
+function closeVtGhStatsModal_() { document.getElementById('vtGhStatsOverlay').style.display = 'none'; }
+
+function renderVtGhStats_() {
+  const overlay = document.getElementById('vtGhStatsOverlay');
+  if (!overlay || overlay.style.display === 'none') return;
+  const dateStr = document.getElementById('vtGhStatsDateInput').value;
+  if (!dateStr) return;
+
+  const vtToday = vtGhStatsFilterByDate_(vtRows_, dateStr);
+  const ghToday = vtGhStatsFilterByDate_(ghRows2_, dateStr);
+
+  const vtLsxSet = {}, ghLsxSet = {};
+  vtToday.forEach(function(r) { vtLsxSet[r.lsx] = true; });
+  ghToday.forEach(function(r) { ghLsxSet[r.lsx] = true; });
+
+  const dd = dateStr.split('-'); const dateLabel = dd[2] + '/' + dd[1] + '/' + dd[0];
+  document.getElementById('vtGhStatsSummary').innerHTML =
+    'Ngày ' + dateLabel + ': Nhận vật tư <b>' + Object.keys(vtLsxSet).length + '</b> lệnh / <b>' + vtToday.length + '</b> món' +
+    ' &nbsp;&nbsp;|&nbsp;&nbsp; Giao hàng <b>' + Object.keys(ghLsxSet).length + '</b> lệnh / <b>' + ghToday.length + '</b> món';
+
+  // ----- Theo LSX -----
+  const byLsx = {};
+  vtToday.forEach(function(r) { (byLsx[r.lsx] = byLsx[r.lsx] || { vt: 0, gh: 0 }).vt++; });
+  ghToday.forEach(function(r) { (byLsx[r.lsx] = byLsx[r.lsx] || { vt: 0, gh: 0 }).gh++; });
+  const lsxKeys = Object.keys(byLsx).sort();
+  document.getElementById('vtGhStatsLsxTable').innerHTML =
+    '<tr><th>LSX</th><th>SL Nhận VT</th><th>SL Giao hàng</th></tr>' +
+    (lsxKeys.length ? lsxKeys.map(function(l) {
+      return '<tr><td>' + escapeHtml_(l) + '</td><td><b>' + byLsx[l].vt + '</b></td><td><b>' + byLsx[l].gh + '</b></td></tr>';
+    }).join('') : '<tr><td colspan="3" class="empty-state-cell">Không có dữ liệu.</td></tr>');
+
+  // ----- Theo người quét -----
+  const byPerson = {};
+  function addPerson_(r, field) {
+    const p = vtGhStatsSplitPerson_(r.nguoi);
+    const key = (p.msnv || p.ten).toLowerCase();
+    if (!byPerson[key]) byPerson[key] = { msnv: p.msnv, ten: p.ten, vt: 0, gh: 0 };
+    byPerson[key][field]++;
+  }
+  vtToday.forEach(function(r) { addPerson_(r, 'vt'); });
+  ghToday.forEach(function(r) { addPerson_(r, 'gh'); });
+  const personList = Object.keys(byPerson).map(function(k) { return byPerson[k]; })
+    .sort(function(a, b) { return (b.vt + b.gh) - (a.vt + a.gh); });
+
+  document.getElementById('vtGhStatsPersonTable').innerHTML =
+    '<tr><th>MSNV</th><th>Tên</th><th>SL Nhận VT</th><th>SL Giao hàng</th></tr>' +
+    (personList.length ? personList.map(function(p) {
+      return '<tr><td>' + escapeHtml_(p.msnv || '-') + '</td><td>' + escapeHtml_(p.ten) + '</td>' +
+        '<td><b>' + p.vt + '</b></td><td><b>' + p.gh + '</b></td></tr>';
+    }).join('') : '<tr><td colspan="4" class="empty-state-cell">Không có dữ liệu.</td></tr>');
+}
+
 function vtGhColumns_(target) {
   const isGiao = (target === 'giaohang');
   return [
@@ -4671,6 +4750,7 @@ function loadVtData_() {
       vtRows_ = rows || [];
       try { localStorage.setItem(VT_LOCAL_CACHE_KEY_, JSON.stringify(vtRows_)); } catch (e) {}
       renderVtGhTable_('vtResultWrap', vtRows_, 'nhanvattu');
+      renderVtGhStats_();
       if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
     })
     .withFailureHandler(function(err) {
@@ -4691,6 +4771,7 @@ function loadGhData2_() {
       ghRows2_ = rows || [];
       try { localStorage.setItem(GH2_LOCAL_CACHE_KEY_, JSON.stringify(ghRows2_)); } catch (e) {}
       renderVtGhTable_('ghResultWrap', ghRows2_, 'giaohang');
+      renderVtGhStats_();
       if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
     })
     .withFailureHandler(function(err) {
@@ -10512,6 +10593,7 @@ window.addEventListener('online', tryFlushPriorityQueue_);
           /* ================= ESC / bấm ra ngoài để đóng MỌI modal dạng overlay ================= */
       // Map dùng cho phím Esc - đủ cả 12 modal, kể cả 2 modal cho phép resize.
       const MODAL_ESC_CLOSE_MAP_ = {
+        vtGhStatsOverlay: closeVtGhStatsModal_,
         devNoticeOverlay: closeDevNotice_,
         customDhOverlay: closeCustomDhModal_,
         customPriorityOverlay: closeCustomPriorityModal_,
@@ -11023,6 +11105,41 @@ window.addEventListener('online', tryFlushPriorityQueue_);
       </div>
     </div>
   </div>
+
+  <div id="vtGhStatsOverlay" class="colvis-overlay" style="display:none; z-index:600;">
+  <div class="colvis-modal" style="width:680px; max-width:95vw; max-height:88vh;">
+    <div class="colvis-header">
+      <h3><i class="fa-solid fa-chart-column" style="margin-right:8px;"></i>Thống kê Nhận Vật Tư / Giao Hàng</h3>
+      <span class="upbom-close" onclick="closeVtGhStatsModal_()">&times;</span>
+    </div>
+    <div style="padding:16px; display:flex; flex-direction:column; gap:14px; overflow-y:auto;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <label style="font-size:13px; font-weight:700; color:#333;">Chọn ngày
+          <input type="date" id="vtGhStatsDateInput" onchange="renderVtGhStats_()"
+            style="margin-left:8px; padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px;" />
+        </label>
+      </div>
+      <div id="vtGhStatsSummary" style="background:#eaf2ff; border-radius:8px; padding:10px 14px; font-size:14px; color:#003DA5; font-weight:700;"></div>
+
+      <div>
+        <div style="font-size:13px; font-weight:800; color:#003DA5; margin-bottom:6px;"><i class="fa-solid fa-boxes-stacked" style="margin-right:6px;"></i>Theo lệnh sản xuất (LSX)</div>
+        <div style="overflow:auto; max-height:240px; border:1px solid #eee; border-radius:8px;">
+          <table id="vtGhStatsLsxTable" class="perm-table" style="width:100%;"></table>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:13px; font-weight:800; color:#003DA5; margin-bottom:6px;"><i class="fa-solid fa-user" style="margin-right:6px;"></i>Theo người quét</div>
+        <div style="overflow:auto; max-height:240px; border:1px solid #eee; border-radius:8px;">
+          <table id="vtGhStatsPersonTable" class="perm-table" style="width:100%;"></table>
+        </div>
+      </div>
+    </div>
+    <div class="upbom-footer">
+      <button type="button" onclick="closeVtGhStatsModal_()" style="background:#1a73e8; color:#fff; font-weight:bold; border:none; border-radius:4px; padding:8px 22px; cursor:pointer;">Đóng</button>
+    </div>
+  </div>
+</div>
 
     <div id="vtGhOverlay" class="colvis-overlay" style="display:none;">
     <div class="colvis-modal" style="width:420px; max-height:90vh;">
@@ -12778,9 +12895,11 @@ function handleSyncSignal_(name) {
     const has = function(n) { return names.indexOf(n) !== -1; };
 
     if (has('bom')) { refreshSyncStatus(); silentRefreshTraCuu_(); }
-    if (has('bom') || has('tiendo')) refreshDashboardSilently_();
-    if (has('vt') && xgIsTab_('tab-nhanvattu')) loadVtData_();
-    if (has('gh') && xgIsTab_('tab-giaohang2')) loadGhData2_();
+    // Nhận Vật Tư / Giao Hàng có dữ liệu mới -> cập nhật NGAY, không đợi mở đúng tab mới tải
+    if (has('vt')) loadVtData_();
+    if (has('gh')) loadGhData2_();
+    // % Vật tư/Giao hàng trên Dashboard cũng phụ thuộc VT/GH -> làm mới Tiến độ luôn
+    if (has('bom') || has('tiendo') || has('vt') || has('gh')) refreshDashboardSilently_();
     ['tien', 'phay', 'nguoi'].forEach(function(l) {
       if (has('bcgc_' + l)) bcgcRefreshSilently_(l);
     });
@@ -12837,6 +12956,37 @@ function xgCleanTokens_(raw, minLen) {
     .map(function(s) { return s.trim().replace(/[^\w.\/\-À-ỹ]/g, ''); })
     .filter(function(s) { return s.length >= minLen; });
 }
+
+  // Tìm BOM để xóa (Quản trị BOM) - gọi thẳng Supabase, không qua Apps Script
+  // => không còn bị tính vào hạn mức UrlFetch của Google nữa
+  adminSearchBom: async function(lsxQuery) {
+    const tokens = String(lsxQuery || '').split(/[,;\s]+/).map(function(s) { return s.trim(); })
+      .filter(function(s) { return s.length >= 3 || /^[A-Za-z]{2}$/.test(s); });
+    if (tokens.length === 0) {
+      const e = new Error('Từ khóa quá ngắn, vui lòng nhập đầy đủ LSX (kiểm tra lại dấu "/") hoặc chọn loại đơn (BUS, GHE...).');
+      e.noFallback = true;
+      throw e;
+    }
+    const conds = tokens.map(function(t) {
+      if (/^[A-Za-z]{2,8}\.?$/.test(t)) return { op: 'like', val: t.replace(/\.$/, '').toUpperCase() + '.*' };
+      return { op: 'ilike', val: '*' + t + '*' };
+    });
+    const filterParam = conds.length === 1
+      ? 'lsx=' + conds[0].op + '.' + encodeURIComponent(conds[0].val)
+      : 'or=(' + conds.map(function(c) { return 'lsx.' + c.op + '.' + encodeURIComponent(c.val); }).join(',') + ')';
+
+    const LIMIT = 2000;
+    const url = SUPABASE_URL_DIRECT_ + '/rest/v1/bom_giao_viec?' + filterParam + '&select=*&order=thu_tu.asc';
+    const res = await fetch(url, {
+      headers: Object.assign({ Range: '0-' + (LIMIT - 1), 'Range-Unit': 'items', Prefer: 'count=exact' }, supabaseHeaders_())
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    const cr = res.headers.get('Content-Range') || '';
+    const m = cr.match(/\/(\d+)$/);
+    const total = m ? Number(m[1]) : rows.length;
+    return { rows: rows, total: total, truncated: total > rows.length };
+  }
 
 window.DIRECT_READS_ = {
   // Tra cứu theo LSX
