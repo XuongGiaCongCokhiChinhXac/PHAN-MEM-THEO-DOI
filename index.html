@@ -2720,32 +2720,43 @@ function confirmModalYes_() {
           .getNotifications(0);
       }
 
-      const NOTIF_POLL_MS = 180000; // 3 phút - thông báo Gấp/Ưu tiên vẫn đủ nhanh, giảm mạnh số lệnh gọi/ngày
+      const NOTIF_POLL_MS = 20000; // 3 phút - thông báo Gấp/Ưu tiên vẫn đủ nhanh, giảm mạnh số lệnh gọi/ngày
+            function ingestNotifications_(rows, withToast) {
+        if (!rows || !rows.length) return;
+        const have = {};
+        notifList_.forEach(function(n) { have[n.id] = true; });
+        let added = 0;
+        rows.slice().sort(function(a, b) { return a.id - b.id; }).forEach(function(n) {
+          if (have[n.id]) return; // chống trùng giữa Realtime và polling
+          have[n.id] = true; added++;
+          notifList_.push(n);
+          if (withToast) showToast(n.message, 'info');
+          if (n.id > lastNotifId_) lastNotifId_ = n.id;
+        });
+        if (!added) return;
+        notifList_.sort(function(a, b) { return a.id - b.id; });
+        try { localStorage.setItem('gcck_last_notif_id', String(lastNotifId_)); } catch (e) {}
+        updateNotifBadge_();
+        const ov = document.getElementById('notifOverlay');
+        if (ov && ov.classList.contains('open')) renderNotifModal_();
+        if (withToast) refreshDashboardSilently_();
+      }
+
       function pollNotifications_() {
-        if (document.hidden) return; // tab đang ẩn -> bỏ qua, khi mở lại visibilitychange đã tự lấy bù
+        if (document.hidden) return;
         google.script.run
           .withSuccessHandler(function(rows) {
-            if (!rows || rows.length === 0) { notifFirstLoad_ = false; return; }
-            const isFreshBatch = !notifFirstLoad_; // true = có thông báo MỚI thật sự (không phải lần tải đầu)
-            rows.forEach(function(n) {
-              notifList_.push(n);
-              if (isFreshBatch) showToast(n.message, 'info');
-              lastNotifId_ = n.id;
-            });
+            const fresh = !notifFirstLoad_;
             notifFirstLoad_ = false;
-            try { localStorage.setItem('gcck_last_notif_id', String(lastNotifId_)); } catch (e) {}
-            updateNotifBadge_();
-            if (document.getElementById('notifOverlay').classList.contains('open')) renderNotifModal_();
-
-            // Mọi thông báo trong hệ thống chỉ tạo cho đơn ƯU TIÊN, và backend đã đẩy %
-            // Tiến độ mới lên Supabase gần như ngay lập tức khi phát hiện thay đổi (xem
-            // syncTienDoForLsxList_) - nên hễ có thông báo mới là làm mới luôn Dashboard
-            // ngầm, không cần đợi chu kỳ tự động 15 phút hay người dùng bấm Làm mới.
-            if (isFreshBatch) refreshDashboardSilently_();
+            ingestNotifications_(rows, fresh);
           })
-          .withFailureHandler(function() { /* im lặng, lần sau tự thử lại */ })
+          .withFailureHandler(function() {})
           .getNotifications(lastNotifId_);
       }
+      // Quay lại tab -> lấy bù ngay thay vì đợi chu kỳ tiếp theo
+      document.addEventListener('visibilitychange', function() {
+        if (!document.hidden && currentUser_) pollNotifications_();
+      });
 
       // Gọi khi đăng nhập THÀNH CÔNG - lưu lại thông tin cho lần sau, rồi bật màn hình chờ.
       function finishLogin_(user, remember, passUsed) {
@@ -4006,8 +4017,11 @@ function tgGcStickyColClass_(arrIdx) {
       // So sánh dữ liệu mới nhất từ server với dữ liệu đang hiển thị,
       // chỉ cập nhật đúng những ô VT/GH/NMK/Ghi chú bị thay đổi bởi người khác,
       // không load lại cả bảng nên không mất vị trí cuộn hay đang gõ dở.
-      function mergeRemoteChanges(freshRows) {
+            function mergeRemoteChanges(freshRows) {
         let summaryNeedsUpdate = false;
+
+        const localMap = {};
+        lastRows.forEach(function(r) { localMap[r.lsx_stt] = r; });
 
         const trMap = {};
         document.querySelectorAll('#result tr[data-lsxstt]').forEach(function(tr) {
@@ -4017,27 +4031,34 @@ function tgGcStickyColClass_(arrIdx) {
         const colIndex = {};
         COLUMNS.forEach(function(c, i) { colIndex[c.key] = i; });
 
+        // Tìm ô theo data-c (chỉ số thật), không dùng tr.cells[] vì sẽ sai khi có cột bị ẩn
+        function setCell_(tr, key, html) {
+          if (!tr) return;
+          const td = tr.querySelector('td[data-c="' + colIndex[key] + '"]');
+          if (td) td.innerHTML = html;
+        }
+
         freshRows.forEach(function(fresh) {
-          const local = findRowData(fresh.lsx_stt);
+          const local = localMap[fresh.lsx_stt];
           if (!local) return;
           const tr = trMap[fresh.lsx_stt];
 
           BOOL_KEYS.forEach(function(key) {
-            if (local[key] !== fresh[key]) {
+            if (fresh[key] === undefined) return;
+            if (!!local[key] !== !!fresh[key]) {
               local[key] = fresh[key];
               summaryNeedsUpdate = true;
-              if (tr) tr.cells[colIndex[key]].innerHTML =
-                '<span class="chk' + (fresh[key] ? ' checked' : '') + '">' + (fresh[key] ? '&#10003;' : '') + '</span>';
+              setCell_(tr, key, '<span class="chk' + (fresh[key] ? ' checked' : '') + '">' + (fresh[key] ? '&#10003;' : '') + '</span>');
             }
           });
 
-          if (local.ghi_chu !== fresh.ghi_chu) {
+          if (fresh.ghi_chu !== undefined && local.ghi_chu !== fresh.ghi_chu) {
             local.ghi_chu = fresh.ghi_chu;
-            if (tr) tr.cells[colIndex['ghi_chu']].innerHTML = escapeHtml_(fresh.ghi_chu || '').replace(/\n/g, '<br>');
+            setCell_(tr, 'ghi_chu', escapeHtml_(fresh.ghi_chu || '').replace(/\n/g, '<br>'));
           }
         });
 
-        if (summaryNeedsUpdate) updateSummary(displayedRows); // đếm theo dữ liệu đang hiển thị (sau lọc), không phải toàn bộ
+        if (summaryNeedsUpdate) updateSummary(displayedRows);
       }
 
       /* ---------- Chọn ô: click, kéo chọn, phím mũi tên/Enter ---------- */
@@ -12898,13 +12919,23 @@ let syncStampsLast_ = null;
 const SYNC_WATCH_MS_ = 60000; // chỉ còn là dự phòng, Realtime lo phần tức thời
 
 function silentRefreshTraCuu_() {
-  if (!currentQuery || currentQueryMode !== 'lsx' || isSearching) return;
-  if (!xgIsTab_('tab-checkdon')) return;
+  if (!currentQuery || isSearching || !xgIsTab_('tab-checkdon')) return;
+
+  if (currentQueryMode === 'prefix') {
+    // Xem theo loại đơn có thể hàng chục nghìn dòng -> chỉ tải vài cột nhỏ để đối chiếu
+    const p = String(currentQuery).replace(/[^A-Za-z]/g, '').toUpperCase();
+    if (!p) return;
+    xgFetchAll_('bom_giao_viec?lsx=like.' + encodeURIComponent(p + '.') + '*&select=lsx_stt,nhan_vat_tu,giao_hang,nmk,ghi_chu')
+      .then(function(rows) { mergeRemoteChanges(rows); })
+      .catch(function() {});
+    return;
+  }
+
   google.script.run
     .withSuccessHandler(function(rows) {
       if (!rows) return;
       if (rows.length !== lastRows.length) { lastRows = rows; render(applyFilters(rows)); }
-      else mergeRemoteChanges(rows); // chỉ cập nhật ô VT/GH/NMK/Ghi chú đổi, không mất vị trí cuộn
+      else mergeRemoteChanges(rows);
     })
     .withFailureHandler(function() {})
     .searchByLSX(currentQuery);
@@ -12948,27 +12979,49 @@ let syncTimer_ = null;
 
 // Gom nhiều tín hiệu đến sát nhau thành 1 lần làm mới; trễ ngẫu nhiên 0,8–4,8s
 // để hàng chục máy không cùng gọi server một lúc.
+let syncLastRun_ = 0;
+const SYNC_MIN_GAP_MS_ = 3000; // tối đa 1 lần làm mới / 3 giây, nhưng tín hiệu cuối luôn được xử lý
+
 function handleSyncSignal_(name) {
   syncPending_.add(name);
   if (syncTimer_) return;
+  const wait = Math.max(300 + Math.random() * 700, SYNC_MIN_GAP_MS_ - (Date.now() - syncLastRun_));
   syncTimer_ = setTimeout(function() {
+    syncLastRun_ = Date.now();
     const names = Array.from(syncPending_);
     syncPending_.clear();
     syncTimer_ = null;
-    if (document.hidden) return; // tab đang ẩn: khi mở lại, polling sẽ tự bù
+    if (document.hidden) return; // mở lại tab sẽ tự bù (xem pollSyncSignalsDirect_)
     const has = function(n) { return names.indexOf(n) !== -1; };
 
     if (has('bom')) { refreshSyncStatus(); silentRefreshTraCuu_(); }
-    // Nhận Vật Tư / Giao Hàng có dữ liệu mới -> cập nhật NGAY, không đợi mở đúng tab mới tải
-    if (has('vt')) loadVtData_();
-    if (has('gh')) loadGhData2_();
-    // % Vật tư/Giao hàng trên Dashboard cũng phụ thuộc VT/GH -> làm mới Tiến độ luôn
+    // Chỉ tải bảng Nhận VT / Giao hàng khi đang mở đúng tab (vào tab sẽ tự tải)
+    if (has('vt') && xgIsTab_('tab-nhanvattu')) loadVtData_();
+    if (has('gh') && xgIsTab_('tab-giaohang2')) loadGhData2_();
     if (has('bom') || has('tiendo') || has('vt') || has('gh')) refreshDashboardSilently_();
     ['tien', 'phay', 'nguoi'].forEach(function(l) {
       if (has('bcgc_' + l)) bcgcRefreshSilently_(l);
     });
-  }, 300 + Math.random() * 1200);
+  }, wait);
 }
+
+let syncSigLast_ = null;
+function pollSyncSignalsDirect_() {
+  if (document.hidden || typeof currentUser_ === 'undefined' || !currentUser_) return;
+  fetch(SUPABASE_URL_DIRECT_ + '/rest/v1/sync_signals?select=name,stamp', { headers: supabaseHeaders_() })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(rows) {
+      const cur = {};
+      rows.forEach(function(r) { cur[r.name] = String(r.stamp); });
+      const prev = syncSigLast_;
+      syncSigLast_ = cur;
+      if (!prev) return; // lần đầu chỉ ghi mốc
+      Object.keys(cur).forEach(function(k) { if (cur[k] !== prev[k]) handleSyncSignal_(k); });
+    })
+    .catch(function() {});
+}
+setInterval(pollSyncSignalsDirect_, 10000);
+document.addEventListener('visibilitychange', function() { if (!document.hidden) pollSyncSignalsDirect_(); });
 
 let rtStarted_ = false;
 function startRealtime_() {
@@ -12978,9 +13031,15 @@ function startRealtime_() {
     const client = window.supabase.createClient(SUPABASE_URL_DIRECT_, SUPABASE_ANON_KEY_, {
       realtime: { params: { eventsPerSecond: 5 } }
     });
-    client.channel('sync-signals')
+    client.channel('app-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_signals' }, function(p) {
-        if (p && p.new && p.new.name) handleSyncSignal_(p.new.name);
+        if (p && p.new && p.new.name) {
+          if (syncSigLast_) syncSigLast_[p.new.name] = String(p.new.stamp); // tránh làm mới trùng với polling
+          handleSyncSignal_(p.new.name);
+        }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, function(p) {
+        if (p && p.new) ingestNotifications_([p.new], !notifFirstLoad_);
       })
       .subscribe(function(status) {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Realtime:', status);
